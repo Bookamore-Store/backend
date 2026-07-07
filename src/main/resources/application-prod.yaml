@@ -1,7 +1,7 @@
 spring:
   config:
     activate:
-      on-profile: local
+      on-profile: prod
   security:
     oauth2:
       client:
@@ -12,25 +12,17 @@ spring:
           facebook:
             client-id: ${FACEBOOK_CLIENT_ID}
             client-secret: ${FACEBOOK_CLIENT_SECRET}
-  datasource:
-    url: jdbc:postgresql://bookamore-db:5432/bookamore-db  # hostname = сервіс у docker-compose
-    username: postgres
-    password: postgres
-    driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
       ddl-auto: none
-    show-sql: true
+    show-sql: false
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     defer-datasource-initialization: false
-    properties:
-      hibernate:
-        format_sql: true
   sql:
     init:
-      mode: always
-      data-locations: classpath:data-local.sql
+      mode: never
 
 file:
-  upload-dir: /app/uploads # dev
-  #upload-dir: ./src/main/resources/uploads # local
+  hash-algorithm: SHA-256
+  upload-dir: /app/uploads
+  sub-dirs-perms: 775 # Octal POSIX permissions for upload subdirectories
