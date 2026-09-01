@@ -16,8 +16,12 @@ import java.io.IOException;
 @Slf4j
 @Component
 public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
-    // SPA route that consumes the token/error query param and finishes the login
-    static final String OAUTH2_CALLBACK_PATH = "/oauth2/callback";
+    // SPA route that consumes the token/error query param and finishes the login.
+    // Must match the OAuthCallbackPage route in the frontend router (currently "/login").
+    // Do not use "/oauth2/callback": the frontend nginx sends every ^/(login/)?oauth2/ request
+    // to this service, so such a path would never reach the SPA and Spring would answer
+    // "No static resource oauth2/callback" with HTTP 500.
+    static final String OAUTH2_CALLBACK_PATH = "/login";
 
     private final JwtTokenService tokenService;
 
