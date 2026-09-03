@@ -20,6 +20,8 @@ import com.bookamore.backend.repository.UserRepository;
 import com.bookamore.backend.repository.spec.OfferSpecification;
 import com.bookamore.backend.service.BookService;
 import com.bookamore.backend.service.ImageService;
+import com.bookamore.backend.service.OfferFavoriteCounter;
+import com.bookamore.backend.service.OfferFavoriteMarker;
 import com.bookamore.backend.service.OfferService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,12 +51,12 @@ public class OfferServiceImpl implements OfferService {
     private final ImageService imageService;
 
     private final OfferMapper offerMapper;
+    private final OfferFavoriteMarker offerFavoriteMarker;
+    private final OfferFavoriteCounter offerFavoriteCounter;
 
     private static final Set<String> BOOK_FIELDS = Set.of(
             "title", "yearOfRelease", "description", "condition", "authorName"
     );
-
-    private final String offerPreviewsSubDir = "offer";
 
     @Transactional
     public OfferResponse create(OfferRequest request) {
@@ -76,7 +78,10 @@ public class OfferServiceImpl implements OfferService {
         offer.setBook(book);
         offer.setUser(user);
         offer = offerRepository.save(offer);
-        return offerMapper.toResponse(offer);
+        OfferResponse resp = offerMapper.toResponse(offer);
+        resp.setFavorite(false);
+        resp.setFavoritesCount(0L);
+        return resp;
     }
 
     @Transactional
@@ -88,7 +93,10 @@ public class OfferServiceImpl implements OfferService {
         offer.setBook(savedBook);
         offer = offerRepository.save(offer);
 
-        return offerMapper.toResponseWithBook(offer);
+        OfferWithBookResponse resp = offerMapper.toResponseWithBook(offer);
+        resp.setFavorite(false);
+        resp.setFavoritesCount(0L);
+        return resp;
     }
 
     public Page<Offer> getOffersEntityPage(Integer page, Integer size, String sortBy, String sortDir) {
@@ -126,12 +134,18 @@ public class OfferServiceImpl implements OfferService {
 
 
     public Page<OfferResponse> getOffersPage(Integer page, Integer size, String sortBy, String sortDir) {
-        return getOffersEntityPage(page, size, sortBy, sortDir).map(offerMapper::toResponse);
+        Page<OfferResponse> p = getOffersEntityPage(page, size, sortBy, sortDir).map(offerMapper::toResponse);
+        offerFavoriteMarker.mark(p);
+        offerFavoriteCounter.count(p);
+        return p;
     }
 
     public Page<OfferWithBookResponse> getOffersWithBooksPage(OfferFilter filter, Integer page, Integer size,
                                                               String sortBy, String sortDir) {
-        return getOffersEntityPageWithFilter(filter, page, size, sortBy, sortDir).map(offerMapper::toResponseWithBook);
+        Page<OfferWithBookResponse> p = getOffersEntityPageWithFilter(filter, page, size, sortBy, sortDir).map(offerMapper::toResponseWithBook);
+        offerFavoriteMarker.markWithBook(p);
+        offerFavoriteCounter.countWithBook(p);
+        return p;
     }
 
     public Page<Offer> getOffersEntityPageWithFilter(OfferFilter filter, Integer page, Integer size, String sortBy, String sortDir) {
@@ -173,11 +187,17 @@ public class OfferServiceImpl implements OfferService {
     }
 
     public OfferResponse getById(UUID offerId) {
-        return offerMapper.toResponse(getEntityById(offerId));
+        OfferResponse response = offerMapper.toResponse(getEntityById(offerId));
+        offerFavoriteMarker.mark(response);
+        offerFavoriteCounter.count(response);
+        return response;
     }
 
     public OfferWithBookResponse getWithBookById(UUID offerId) {
-        return offerMapper.toResponseWithBook(getEntityById(offerId));
+        OfferWithBookResponse response = offerMapper.toResponseWithBook(getEntityById(offerId));
+        offerFavoriteMarker.markWithBook(response);
+        offerFavoriteCounter.countWithBook(response);
+        return response;
     }
 
     @Transactional
@@ -193,9 +213,15 @@ public class OfferServiceImpl implements OfferService {
 
         if (isModified) {
             Offer savedOffer = offerRepository.save(existingOffer);  // save modified offer
-            return offerMapper.toResponse(savedOffer);
+            OfferResponse response = offerMapper.toResponse(savedOffer);
+            offerFavoriteMarker.mark(response);
+            offerFavoriteCounter.count(response);
+            return response;
         }
-        return offerMapper.toResponse(existingOffer);
+        OfferResponse response = offerMapper.toResponse(existingOffer);
+        offerFavoriteMarker.mark(response);
+        offerFavoriteCounter.count(response);
+        return response;
     }
 
     private boolean updateSimpleFields(Offer existingOffer, Offer patch) {
