@@ -1,0 +1,64 @@
+name: Build and push image
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: bookamore
+  COMPONENT: backend
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute lowercase image name
+        id: image
+        run: echo "name=${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/${IMAGE_PREFIX}-${COMPONENT}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          # :latest — щоб .env на VM не треба було чіпати руками,
+          # :<sha> — щоб завжди можна було відкотитись на конкретний коміт.
+          tags: |
+            ${{ steps.image.outputs.name }}:latest
+            ${{ steps.image.outputs.name }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ env.COMPONENT }}
+          cache-to: type=gha,mode=max,scope=${{ env.COMPONENT }}
+
+  dispatch-deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      # gitops не бачить пушів у цей репозиторій — розбудити його деплой
+      # можна тільки явним repository_dispatch з PAT, бо GITHUB_TOKEN
+      # не може тригерити workflow в іншому репо.
+      - name: Trigger gitops deploy
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITOPS_DISPATCH_TOKEN }}
+          repository: ${{ github.repository_owner }}/gitops
+          event-type: ${{ env.COMPONENT }}-built
+          client-payload: |-
+            {"branch": "${{ github.ref_name }}", "sha": "${{ github.sha }}"}

@@ -7,11 +7,14 @@ spring:
       client:
         registration:
           google:
-            client-id: ${GOOGLE_CLIENT_ID}
-            client-secret: ${GOOGLE_CLIENT_SECRET}
+            # Заглушки, а не порожні рядки: ClientRegistration падає на порожньому
+            # client-id, і застосунок не піднявся б узагалі. Соцлогін із ними не
+            # працює — для нього потрібні справжні значення в .env.
+            client-id: ${GOOGLE_CLIENT_ID:local-dev-google-client-id-unset}
+            client-secret: ${GOOGLE_CLIENT_SECRET:local-dev-google-client-secret-unset}
           facebook:
-            client-id: ${FACEBOOK_CLIENT_ID}
-            client-secret: ${FACEBOOK_CLIENT_SECRET}
+            client-id: ${FACEBOOK_CLIENT_ID:local-dev-facebook-client-id-unset}
+            client-secret: ${FACEBOOK_CLIENT_SECRET:local-dev-facebook-client-secret-unset}
   datasource:
     url: jdbc:postgresql://bookamore-db:5432/bookamore-db  # hostname = сервіс у docker-compose
     username: postgres
@@ -34,3 +37,19 @@ spring:
 file:
   upload-dir: /app/uploads # dev
   #upload-dir: ./src/main/resources/uploads # local
+
+# Значення, які код читає через @Value і які без .env не резолвились — свіжий
+# клон падав ще до старту Tomcat на `Could not resolve placeholder 'JWT_SECRET'`.
+#
+# Лежать саме тут, у профілі local, а не дефолтами в @Value: у dev і prod ці
+# ключі лишаються невизначеними, тож розгортання без справжніх секретів так
+# само впаде на старті, як і раніше.
+#
+# Писати їх як ${JWT_SECRET:...} не можна — плейсхолдер із тим самим іменем,
+# що й ключ, дає `Circular placeholder reference`. Обгортка тут і не потрібна:
+# і змінні оточення, і System properties із .env мають вищий пріоритет за
+# application-*.yaml, тож будь-яке з цих джерел перекриє значення нижче.
+JWT_SECRET: bG9jYWwtZGV2LW9ubHktbm90LWZvci1kZXBsb3ltZW50ISE=
+JWT_EXPIRATION: 86400000
+CLIENT_URL: http://localhost:8080
+SWAGGER_SERVER_URL: http://localhost:8080

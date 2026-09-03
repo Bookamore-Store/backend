@@ -16,10 +16,18 @@ import java.io.IOException;
 @Slf4j
 @Component
 public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
+    // SPA route that consumes the token/error query param and finishes the login.
+    // Must match the OAuthCallbackPage route in the frontend router (currently "/login").
+    // Do not use "/oauth2/callback": the frontend nginx sends every ^/(login/)?oauth2/ request
+    // to this service, so such a path would never reach the SPA and Spring would answer
+    // "No static resource oauth2/callback" with HTTP 500.
+    static final String OAUTH2_CALLBACK_PATH = "/login";
+
     private final JwtTokenService tokenService;
 
-
-    @Value("${CLIENT_URL}")
+    // CLIENT_URL may hold a comma-separated list (used as-is for CORS) — redirects use the
+    // first origin, trailing slashes stripped so the callback path is not doubled up
+    @Value("#{'${CLIENT_URL}'.split(',')[0].trim().replaceAll('/+$', '')}")
     private String clientUrl;
 
     public OAuth2SuccessHandler(JwtTokenService tokenService) {
@@ -30,15 +38,15 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     public void onAuthenticationSuccess(HttpServletRequest request,
                                         HttpServletResponse response,
                                         Authentication authentication) throws IOException {
-        log.info("onAuthenticationSuccess method is WORKING!!!");
-
         // get user from authentication
         JwtUserDetails oAuth2User = (JwtUserDetails) authentication.getPrincipal();
 
         // generate JWT token
         String token = tokenService.generateToken(oAuth2User.getId());
 
-        String redirectUrl = UriComponentsBuilder.fromUriString(clientUrl + "/login")
+        log.info("OAuth2 login succeeded for user id {}", oAuth2User.getId());
+
+        String redirectUrl = UriComponentsBuilder.fromUriString(clientUrl + OAUTH2_CALLBACK_PATH)
                 .queryParam("token", token)
                 .build().toUriString();
 
