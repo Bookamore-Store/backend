@@ -12,13 +12,90 @@ env:
   COMPONENT: backend
 
 jobs:
+  # Збираємо кожну платформу на своєму нативному раннері й пушимо БЕЗ тегів —
+  # лише за дайджестом. DEV живе на Ampere A1 (aarch64), PROD — на GCP e2-micro
+  # (amd64), тож один-єдиний образ обидва середовища не влаштовує.
+  # ubuntu-24.04-arm безкоштовний для публічних репозиторіїв; складання arm64
+  # через QEMU на amd64-раннері тут неприйнятне — Maven під емуляцією йде десятки хвилин.
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
+
+      - name: Compute lowercase image name
+        id: image
+        run: echo "name=${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/${IMAGE_PREFIX}-${COMPONENT}" >> "$GITHUB_OUTPUT"
+
+      # linux/amd64 → linux-amd64: скісна риска не годиться ні для імені артефакту,
+      # ні для scope кеша.
+      - name: Compute platform slug
+        id: platform
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: echo "slug=${PLATFORM//\//-}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ matrix.platform }}
+          # Теги ставить job merge — саме він знає про обидві платформи.
+          outputs: type=image,name=${{ steps.image.outputs.name }},push-by-digest=true,name-canonical=true,push=true
+          # Кеш у кожної платформи свій: спільний scope вони б затирали одне одному.
+          cache-from: type=gha,scope=${{ env.COMPONENT }}-${{ steps.platform.outputs.slug }}
+          cache-to: type=gha,mode=max,scope=${{ env.COMPONENT }}-${{ steps.platform.outputs.slug }}
+
+      # Передаємо дайджести в merge через артефакти: імена файлів і є дайджестами,
+      # уміст не потрібен.
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.COMPONENT }}-${{ steps.platform.outputs.slug }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Склеює дайджести обох платформ в один OCI-індекс і вішає на нього теги.
+  # Саме звідси беруться :latest і :<sha>, які прописані в .env на серверах.
+  merge:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-${{ env.COMPONENT }}-*
+          merge-multiple: true
 
       - name: Compute lowercase image name
         id: image
@@ -32,22 +109,33 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          # :latest — щоб .env на VM не треба було чіпати руками,
-          # :<sha> — щоб завжди можна було відкотитись на конкретний коміт.
-          tags: |
-            ${{ steps.image.outputs.name }}:latest
-            ${{ steps.image.outputs.name }}:${{ github.sha }}
-          cache-from: type=gha,scope=${{ env.COMPONENT }}
-          cache-to: type=gha,mode=max,scope=${{ env.COMPONENT }}
+      # :latest — щоб .env на VM не треба було чіпати руками,
+      # :<sha> — щоб завжди можна було відкотитись на конкретний коміт.
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+        run: |
+          docker buildx imagetools create \
+            --tag "${IMAGE}:latest" \
+            --tag "${IMAGE}:${GITHUB_SHA}" \
+            $(printf "${IMAGE}@sha256:%s " *)
+
+      # Явна перевірка, що в індексі справді дві платформи: якщо arm64 відпаде,
+      # DEV на Ampere A1 отримає "no matching manifest" лише під час деплою.
+      - name: Verify both platforms are present
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+        run: |
+          docker buildx imagetools inspect "${IMAGE}:${GITHUB_SHA}" --raw > manifest.json
+          cat manifest.json
+          for want in amd64 arm64; do
+            grep -q "\"architecture\": *\"$want\"" manifest.json \
+              || { echo "::error::$want is missing from the manifest list"; exit 1; }
+          done
 
   dispatch-deploy:
-    needs: build
+    needs: merge
     runs-on: ubuntu-latest
     permissions: {}
     steps:
