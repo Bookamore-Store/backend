@@ -24,16 +24,24 @@ public interface ChatConversationRepository extends JpaRepository<ChatConversati
     @Query(
             value = """
                     SELECT c FROM ChatConversation c
-                    WHERE c.buyer.id = :userId OR c.seller.id = :userId
+                    WHERE (c.buyer.id = :userId AND :includeBuyer = true)
+                       OR (c.seller.id = :userId AND :includeSeller = true)
                     ORDER BY
                       CASE WHEN (c.buyer.id = :userId AND c.buyerUnreadCount > 0)
                              OR (c.seller.id = :userId AND c.sellerUnreadCount > 0)
                            THEN 0 ELSE 1 END,
                       c.lastMessageAt DESC NULLS LAST
                     """,
-            countQuery = "SELECT COUNT(c) FROM ChatConversation c WHERE c.buyer.id = :userId OR c.seller.id = :userId"
+            countQuery = """
+                    SELECT COUNT(c) FROM ChatConversation c
+                    WHERE (c.buyer.id = :userId AND :includeBuyer = true)
+                       OR (c.seller.id = :userId AND :includeSeller = true)
+                    """
     )
-    Page<ChatConversation> findInboxByUserId(@Param("userId") UUID userId, Pageable pageable);
+    Page<ChatConversation> findInboxByUserId(@Param("userId") UUID userId,
+                                             @Param("includeBuyer") boolean includeBuyer,
+                                             @Param("includeSeller") boolean includeSeller,
+                                             Pageable pageable);
 
     @Query("SELECT c FROM ChatConversation c WHERE c.id = :id AND (c.buyer.id = :userId OR c.seller.id = :userId)")
     Optional<ChatConversation> findByIdAndParticipant(@Param("id") UUID id, @Param("userId") UUID userId);
@@ -46,9 +54,12 @@ public interface ChatConversationRepository extends JpaRepository<ChatConversati
             SELECT COALESCE(SUM(CASE WHEN c.buyer.id = :userId THEN c.buyerUnreadCount ELSE c.sellerUnreadCount END), 0) AS unreadMessages,
                    COALESCE(SUM(CASE WHEN (CASE WHEN c.buyer.id = :userId THEN c.buyerUnreadCount ELSE c.sellerUnreadCount END) > 0 THEN 1 ELSE 0 END), 0) AS unreadConversations
             FROM ChatConversation c
-            WHERE c.buyer.id = :userId OR c.seller.id = :userId
+            WHERE (c.buyer.id = :userId AND :includeBuyer = true)
+               OR (c.seller.id = :userId AND :includeSeller = true)
             """)
-    UnreadCountAggregate aggregateUnreadByUserId(@Param("userId") UUID userId);
+    UnreadCountAggregate aggregateUnreadByUserId(@Param("userId") UUID userId,
+                                                 @Param("includeBuyer") boolean includeBuyer,
+                                                 @Param("includeSeller") boolean includeSeller);
 
     interface UnreadCountAggregate {
         long getUnreadMessages();

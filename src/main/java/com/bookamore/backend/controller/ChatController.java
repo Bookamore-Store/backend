@@ -1,13 +1,14 @@
 package com.bookamore.backend.controller;
 
-import com.bookamore.backend.annotation.No400Swgr;
 import com.bookamore.backend.annotation.No404Swgr;
 import com.bookamore.backend.dto.chat.ChatInboxItemResponse;
 import com.bookamore.backend.dto.chat.ChatMessageListResponse;
 import com.bookamore.backend.dto.chat.ChatMessageRequest;
 import com.bookamore.backend.dto.chat.ChatMessageResponse;
+import com.bookamore.backend.dto.chat.ChatReadRequest;
 import com.bookamore.backend.dto.chat.ChatReadResponse;
 import com.bookamore.backend.dto.chat.ChatUnreadCountResponse;
+import com.bookamore.backend.entity.enums.ChatParticipantRole;
 import com.bookamore.backend.service.ChatService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -37,23 +38,30 @@ public class ChatController {
 
     private final ChatService chatService;
 
-    @No400Swgr
     @No404Swgr
     @Operation(summary = "Get conversation inbox",
-            description = "Returns a page of conversations for the authenticated user. Unread conversations come first, then newest last message. Requires JWT.")
+            description = "Returns a page of conversations for the authenticated user. "
+                    + "Optional `role` limits the list to chats where the current user is the buyer or the seller; omit it to return both. "
+                    + "Unread conversations for the current user come first, then newest last message. Requires JWT.")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Inbox page")
+            @ApiResponse(responseCode = "200", description = "Inbox page"),
+            @ApiResponse(responseCode = "400", description = "Invalid `role` value. Allowed: `BUYER`, `SELLER`")
     })
     @GetMapping
     public Page<ChatInboxItemResponse> listInbox(@RequestParam(defaultValue = "0") Integer page,
-                                                 @RequestParam(defaultValue = "20") Integer size) {
-        return chatService.listInbox(page, size);
+                                                 @RequestParam(defaultValue = "20") Integer size,
+                                                 @Parameter(description = "Filter by the current user's role. "
+                                                         + "`BUYER` — conversations where they are the buyer; "
+                                                         + "`SELLER` — conversations where they are the seller. "
+                                                         + "Omit to return both.")
+                                                 @RequestParam(required = false) ChatParticipantRole role) {
+        return chatService.listInbox(page, size, role);
     }
 
-    @No400Swgr
     @No404Swgr
     @Operation(summary = "Get unread chat counts",
-            description = "Returns the total unread message count and the number of conversations with unread messages for the authenticated user. Requires JWT.")
+            description = "Returns the total unread message count and the number of conversations with unread messages for the authenticated user. "
+                    + "Optional `role` limits the counts to chats where the current user is the buyer or the seller; omit it to include both. Requires JWT.")
     @ApiResponses(value = {
             @ApiResponse(
                     responseCode = "200",
@@ -62,11 +70,17 @@ public class ChatController {
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ChatUnreadCountResponse.class)
                     )
-            )
+            ),
+            @ApiResponse(responseCode = "400", description = "Invalid `role` value. Allowed: `BUYER`, `SELLER`")
     })
     @GetMapping("/unread-count")
-    public ChatUnreadCountResponse getUnreadCount() {
-        return chatService.getUnreadCount();
+    public ChatUnreadCountResponse getUnreadCount(
+            @Parameter(description = "Filter by the current user's role. "
+                    + "`BUYER` — conversations where they are the buyer; "
+                    + "`SELLER` — conversations where they are the seller. "
+                    + "Omit to include both.")
+            @RequestParam(required = false) ChatParticipantRole role) {
+        return chatService.getUnreadCount(role);
     }
 
     @Operation(summary = "Get conversation messages",
@@ -115,7 +129,8 @@ public class ChatController {
     }
 
     @Operation(summary = "Mark conversation as read",
-            description = "Marks counterpart messages as read up to `upToMessageId`, or up to the latest message if omitted. Requires JWT.")
+            description = "Marks counterpart messages as read up to `upToMessageId` in the body, "
+                    + "or up to the latest message if the body is omitted or the field is null. Requires JWT.")
     @ApiResponses(value = {
             @ApiResponse(
                     responseCode = "200",
@@ -129,8 +144,8 @@ public class ChatController {
     })
     @PostMapping("/{conversationId}/read")
     public ResponseEntity<ChatReadResponse> markAsRead(@PathVariable UUID conversationId,
-                                                       @Parameter(description = "Mark as read up to this message id (optional)")
-                                                       @RequestParam(required = false) UUID upToMessageId) {
+                                                       @RequestBody(required = false) ChatReadRequest request) {
+        UUID upToMessageId = request != null ? request.getUpToMessageId() : null;
         return ResponseEntity.ok(chatService.markAsRead(conversationId, upToMessageId));
     }
 }

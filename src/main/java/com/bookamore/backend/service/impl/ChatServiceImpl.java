@@ -12,6 +12,7 @@ import com.bookamore.backend.entity.ChatConversation;
 import com.bookamore.backend.entity.ChatMessage;
 import com.bookamore.backend.entity.Offer;
 import com.bookamore.backend.entity.User;
+import com.bookamore.backend.entity.enums.ChatParticipantRole;
 import com.bookamore.backend.entity.enums.OfferStatus;
 import com.bookamore.backend.exception.BadRequestException;
 import com.bookamore.backend.exception.ResourceNotFoundException;
@@ -104,22 +105,22 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ChatInboxItemResponse> listInbox(Integer page, Integer size) {
+    public Page<ChatInboxItemResponse> listInbox(Integer page, Integer size, ChatParticipantRole role) {
         UUID userId = SecurityUtils.requireAuthenticatedUserId();
         Pageable pageable = PageRequest.of(
                 normalizePage(page),
                 capLimit(size, DEFAULT_INBOX_SIZE, MAX_INBOX_SIZE)
         );
-        return conversationRepository.findInboxByUserId(userId, pageable)
+        return conversationRepository.findInboxByUserId(userId, includeBuyer(role), includeSeller(role), pageable)
                 .map(conversation -> chatMapper.toInboxItem(conversation, userId));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public ChatUnreadCountResponse getUnreadCount() {
+    public ChatUnreadCountResponse getUnreadCount(ChatParticipantRole role) {
         UUID userId = SecurityUtils.requireAuthenticatedUserId();
         ChatConversationRepository.UnreadCountAggregate counts =
-                conversationRepository.aggregateUnreadByUserId(userId);
+                conversationRepository.aggregateUnreadByUserId(userId, includeBuyer(role), includeSeller(role));
         return new ChatUnreadCountResponse(
                 (int) counts.getUnreadMessages(),
                 (int) counts.getUnreadConversations()
@@ -260,6 +261,14 @@ public class ChatServiceImpl implements ChatService {
             return content;
         }
         return content.substring(0, PREVIEW_MAX_LENGTH);
+    }
+
+    private boolean includeBuyer(ChatParticipantRole role) {
+        return role == null || role == ChatParticipantRole.BUYER;
+    }
+
+    private boolean includeSeller(ChatParticipantRole role) {
+        return role == null || role == ChatParticipantRole.SELLER;
     }
 
     private int normalizePage(Integer page) {
