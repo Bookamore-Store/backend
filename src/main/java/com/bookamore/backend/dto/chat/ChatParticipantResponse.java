@@ -2,6 +2,7 @@ package com.bookamore.backend.dto.chat;
 
 import com.bookamore.backend.entity.enums.ChatParticipantRole;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -12,10 +13,16 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ChatParticipantResponse {
+    @Schema(example = "d367ec63-a73b-485d-a1c8-6b793b009e53", description = "User id")
     private UUID id;
+
+    @Schema(example = "John", description = "User name")
     private String name;
+
+    @Schema(example = "https://cdn.example.com/avatars/john.png", description = "Avatar URL")
     private String avatarUrl;
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(example = "SELLER", description = "Role in this conversation", nullable = true)
     private ChatParticipantRole role;
 }

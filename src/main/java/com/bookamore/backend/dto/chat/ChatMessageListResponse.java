@@ -1,5 +1,6 @@
 package com.bookamore.backend.dto.chat;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -11,6 +12,9 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ChatMessageListResponse {
+    @Schema(example = "d367ec63-a73b-485d-a1c8-6b793b009e53", description = "Conversation id")
     private UUID conversationId;
+
+    @Schema(description = "Messages in chronological order")
     private List<ChatMessageResponse> messages;
 }
