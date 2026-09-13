@@ -7,6 +7,7 @@ import com.bookamore.backend.dto.chat.ChatMessageRequest;
 import com.bookamore.backend.dto.chat.ChatMessageResponse;
 import com.bookamore.backend.dto.chat.ChatReadResponse;
 import com.bookamore.backend.dto.chat.ChatStartRequest;
+import com.bookamore.backend.dto.chat.ChatUnreadCountResponse;
 import com.bookamore.backend.entity.ChatConversation;
 import com.bookamore.backend.entity.ChatMessage;
 import com.bookamore.backend.entity.Offer;
@@ -27,7 +28,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -108,11 +108,22 @@ public class ChatServiceImpl implements ChatService {
         UUID userId = SecurityUtils.requireAuthenticatedUserId();
         Pageable pageable = PageRequest.of(
                 normalizePage(page),
-                capLimit(size, DEFAULT_INBOX_SIZE, MAX_INBOX_SIZE),
-                Sort.by(Sort.Order.desc("lastMessageAt").nullsLast())
+                capLimit(size, DEFAULT_INBOX_SIZE, MAX_INBOX_SIZE)
         );
         return conversationRepository.findInboxByUserId(userId, pageable)
                 .map(conversation -> chatMapper.toInboxItem(conversation, userId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ChatUnreadCountResponse getUnreadCount() {
+        UUID userId = SecurityUtils.requireAuthenticatedUserId();
+        ChatConversationRepository.UnreadCountAggregate counts =
+                conversationRepository.aggregateUnreadByUserId(userId);
+        return new ChatUnreadCountResponse(
+                (int) counts.getUnreadMessages(),
+                (int) counts.getUnreadConversations()
+        );
     }
 
     @Override

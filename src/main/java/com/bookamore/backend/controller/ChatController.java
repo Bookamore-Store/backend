@@ -1,11 +1,13 @@
 package com.bookamore.backend.controller;
 
+import com.bookamore.backend.annotation.No400Swgr;
 import com.bookamore.backend.annotation.No404Swgr;
 import com.bookamore.backend.dto.chat.ChatInboxItemResponse;
 import com.bookamore.backend.dto.chat.ChatMessageListResponse;
 import com.bookamore.backend.dto.chat.ChatMessageRequest;
 import com.bookamore.backend.dto.chat.ChatMessageResponse;
 import com.bookamore.backend.dto.chat.ChatReadResponse;
+import com.bookamore.backend.dto.chat.ChatUnreadCountResponse;
 import com.bookamore.backend.service.ChatService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -35,9 +37,10 @@ public class ChatController {
 
     private final ChatService chatService;
 
+    @No400Swgr
     @No404Swgr
     @Operation(summary = "Get conversation inbox",
-            description = "Returns a page of conversations for the authenticated user, newest last message first. Requires JWT.")
+            description = "Returns a page of conversations for the authenticated user. Unread conversations come first, then newest last message. Requires JWT.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Inbox page")
     })
@@ -45,6 +48,25 @@ public class ChatController {
     public Page<ChatInboxItemResponse> listInbox(@RequestParam(defaultValue = "0") Integer page,
                                                  @RequestParam(defaultValue = "20") Integer size) {
         return chatService.listInbox(page, size);
+    }
+
+    @No400Swgr
+    @No404Swgr
+    @Operation(summary = "Get unread chat counts",
+            description = "Returns the total unread message count and the number of conversations with unread messages for the authenticated user. Requires JWT.")
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Unread counts",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ChatUnreadCountResponse.class)
+                    )
+            )
+    })
+    @GetMapping("/unread-count")
+    public ChatUnreadCountResponse getUnreadCount() {
+        return chatService.getUnreadCount();
     }
 
     @Operation(summary = "Get conversation messages",

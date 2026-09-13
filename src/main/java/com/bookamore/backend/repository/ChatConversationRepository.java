@@ -22,7 +22,15 @@ public interface ChatConversationRepository extends JpaRepository<ChatConversati
 
     @EntityGraph(attributePaths = {"offer", "offer.book", "seller", "buyer"})
     @Query(
-            value = "SELECT c FROM ChatConversation c WHERE c.buyer.id = :userId OR c.seller.id = :userId",
+            value = """
+                    SELECT c FROM ChatConversation c
+                    WHERE c.buyer.id = :userId OR c.seller.id = :userId
+                    ORDER BY
+                      CASE WHEN (c.buyer.id = :userId AND c.buyerUnreadCount > 0)
+                             OR (c.seller.id = :userId AND c.sellerUnreadCount > 0)
+                           THEN 0 ELSE 1 END,
+                      c.lastMessageAt DESC NULLS LAST
+                    """,
             countQuery = "SELECT COUNT(c) FROM ChatConversation c WHERE c.buyer.id = :userId OR c.seller.id = :userId"
     )
     Page<ChatConversation> findInboxByUserId(@Param("userId") UUID userId, Pageable pageable);
@@ -33,4 +41,18 @@ public interface ChatConversationRepository extends JpaRepository<ChatConversati
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT c FROM ChatConversation c WHERE c.id = :id AND (c.buyer.id = :userId OR c.seller.id = :userId)")
     Optional<ChatConversation> findByIdAndParticipantForUpdate(@Param("id") UUID id, @Param("userId") UUID userId);
+
+    @Query("""
+            SELECT COALESCE(SUM(CASE WHEN c.buyer.id = :userId THEN c.buyerUnreadCount ELSE c.sellerUnreadCount END), 0) AS unreadMessages,
+                   COALESCE(SUM(CASE WHEN (CASE WHEN c.buyer.id = :userId THEN c.buyerUnreadCount ELSE c.sellerUnreadCount END) > 0 THEN 1 ELSE 0 END), 0) AS unreadConversations
+            FROM ChatConversation c
+            WHERE c.buyer.id = :userId OR c.seller.id = :userId
+            """)
+    UnreadCountAggregate aggregateUnreadByUserId(@Param("userId") UUID userId);
+
+    interface UnreadCountAggregate {
+        long getUnreadMessages();
+
+        long getUnreadConversations();
+    }
 }

@@ -1,5 +1,6 @@
 package com.bookamore.backend.config.openapi;
 
+import com.bookamore.backend.annotation.No400Swgr;
 import com.bookamore.backend.annotation.No401Swgr;
 import com.bookamore.backend.annotation.No404Swgr;
 import com.bookamore.backend.annotation.No409Swgr;
@@ -38,6 +39,7 @@ public class OpenApiOperationCustomizer implements OperationCustomizer {
     }
 
     private void handleRemoveCodeAnnotations(Operation operation, HandlerMethod handlerMethod) {
+        removeByAnnotation(operation, handlerMethod, No400Swgr.class, HttpStatus.BAD_REQUEST);
         removeByAnnotation(operation, handlerMethod, No401Swgr.class, HttpStatus.UNAUTHORIZED);
         removeByAnnotation(operation, handlerMethod, No404Swgr.class, HttpStatus.NOT_FOUND);
         removeByAnnotation(operation, handlerMethod, No409Swgr.class, HttpStatus.CONFLICT);
