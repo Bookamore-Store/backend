@@ -70,9 +70,18 @@ public class ChatServiceImpl implements ChatService {
             throw new BadRequestException("Seller cannot start a conversation with themselves");
         }
 
+        String initialMessage = request != null ? request.getInitialMessage() : null;
+        if (initialMessage != null) {
+            if (!StringUtils.hasText(initialMessage)) {
+                throw new BadRequestException("Initial message cannot be blank");
+            }
+            validateContentLength(initialMessage);
+        }
+
         Optional<ChatConversation> existing = conversationRepository.findByOfferIdAndBuyerId(offerId, userId);
         if (existing.isPresent()) {
-            return chatMapper.toDetail(existing.get(), userId);
+            appendInitialMessageIfPresent(existing.get().getId(), userId, initialMessage);
+            return toDetailForOffer(offerId, userId);
         }
 
         if (offer.getStatus() != OfferStatus.OPEN) {
@@ -82,25 +91,18 @@ public class ChatServiceImpl implements ChatService {
         User buyer = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Not found User with uuid = " + userId));
 
-        String initialMessage = request != null ? request.getInitialMessage() : null;
-        if (initialMessage != null) {
-            if (!StringUtils.hasText(initialMessage)) {
-                throw new BadRequestException("Initial message cannot be blank");
-            }
-            validateContentLength(initialMessage);
-        }
-
         try {
             new TransactionTemplate(transactionManager).executeWithoutResult(status ->
                     persistNewConversation(offer, buyer, initialMessage)
             );
         } catch (DataIntegrityViolationException ex) {
             log.debug("Conversation already exists for offer {} and buyer {}", offerId, userId);
+            conversationRepository.findByOfferIdAndBuyerId(offerId, userId)
+                    .ifPresent(conversation ->
+                            appendInitialMessageIfPresent(conversation.getId(), userId, initialMessage));
         }
 
-        return conversationRepository.findByOfferIdAndBuyerId(offerId, userId)
-                .map(conversation -> chatMapper.toDetail(conversation, userId))
-                .orElseThrow(() -> new ResourceNotFoundException("Offer not found with id: " + offerId));
+        return toDetailForOffer(offerId, userId);
     }
 
     @Override
@@ -166,15 +168,7 @@ public class ChatServiceImpl implements ChatService {
         }
         validateContent(request.getContent());
 
-        ChatConversation conversation = conversationRepository.findByIdAndParticipantForUpdate(conversationId, userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
-
-        User sender = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Not found User with uuid = " + userId));
-
-        ChatMessage message = persistMessage(conversation, sender, request.getContent());
-        incrementCounterpartUnread(conversation, userId);
-        conversationRepository.save(conversation);
+        ChatMessage message = persistParticipantMessage(conversationId, userId, request.getContent());
         return chatMapper.toMessage(message);
     }
 
@@ -206,6 +200,32 @@ public class ChatServiceImpl implements ChatService {
         }
         conversationRepository.saveAndFlush(conversation);
         return new ChatReadResponse(conversationId, remaining);
+    }
+
+    private ChatConversationDetailResponse toDetailForOffer(UUID offerId, UUID userId) {
+        return conversationRepository.findByOfferIdAndBuyerId(offerId, userId)
+                .map(conversation -> chatMapper.toDetail(conversation, userId))
+                .orElseThrow(() -> new ResourceNotFoundException("Offer not found with id: " + offerId));
+    }
+
+    private void appendInitialMessageIfPresent(UUID conversationId, UUID senderId, String initialMessage) {
+        if (!StringUtils.hasText(initialMessage)) {
+            return;
+        }
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+                persistParticipantMessage(conversationId, senderId, initialMessage)
+        );
+    }
+
+    private ChatMessage persistParticipantMessage(UUID conversationId, UUID senderId, String content) {
+        ChatConversation conversation = conversationRepository.findByIdAndParticipantForUpdate(conversationId, senderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
+        User sender = userRepository.findById(senderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Not found User with uuid = " + senderId));
+        ChatMessage message = persistMessage(conversation, sender, content);
+        incrementCounterpartUnread(conversation, senderId);
+        conversationRepository.save(conversation);
+        return message;
     }
 
     private void persistNewConversation(Offer offer, User buyer, String initialMessage) {

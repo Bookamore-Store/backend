@@ -128,7 +128,7 @@ Content-Type: application/json
     }
 %}
 
-### 6. Create conversation again (idempotent)
+### 6. Start again with initialMessage (same chat, new buyer message)
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -141,7 +141,7 @@ Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 {
-  "initialMessage": "This second text must not create another conversation or message."
+  "initialMessage": "This second text should be appended as a new buyer message."
 }
 
 > {%
@@ -151,6 +151,10 @@ Content-Type: application/json
     client.test("conversation id is unchanged", function() {
         const expectedId = client.global.get("conversationId");
         client.assert(String(response.body.id) === String(expectedId), "Expected same conversationId");
+    });
+    client.test("preview is the appended initialMessage", function() {
+        client.assert(response.body.lastMessagePreview === "This second text should be appended as a new buyer message.",
+            "Expected lastMessagePreview of the appended buyer message");
     });
 %}
 
@@ -416,8 +420,8 @@ Authorization: Bearer {{buyerToken}}
         client.test("conversationId matches", function() {
             client.assert(String(response.body.conversationId) === String(conversationId), "Expected same conversationId");
         });
-        client.test("at least one message", function() {
-            client.assert(messages.length >= 1, "Expected at least the initial message");
+        client.test("at least two messages", function() {
+            client.assert(messages.length >= 2, "Expected opening message plus appended start text");
         });
         client.test("messages are chronological", function() {
             for (let i = 1; i < messages.length; i++) {
@@ -430,11 +434,11 @@ Authorization: Bearer {{buyerToken}}
             });
             client.assert(found, "Expected initial message text");
         });
-        client.test("idempotent text was not added", function() {
+        client.test("second start text was appended", function() {
             const found = messages.some(function(message) {
-                return message.content === "This second text must not create another conversation or message.";
+                return message.content === "This second text should be appended as a new buyer message.";
             });
-            client.assert(!found, "Idempotent create must not add a second message");
+            client.assert(found, "Start on an existing chat must append initialMessage");
         });
     }
 %}

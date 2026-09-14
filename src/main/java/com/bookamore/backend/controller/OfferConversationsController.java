@@ -29,7 +29,9 @@ public class OfferConversationsController {
 
     @Operation(summary = "Get or create conversation for offer",
             description = "Returns the existing conversation for the authenticated buyer and offer, or creates one. "
-                    + "Always 200 (get-or-create, not 201). Seller cannot start a chat with themselves. Requires JWT.")
+                    + "If initialMessage is present and the conversation already exists, it is appended as a new buyer "
+                    + "message (same as sending to the thread). Always 200 (get-or-create, not 201). "
+                    + "Seller cannot start a chat with themselves. Requires JWT.")
     @ApiResponses(value = {
             @ApiResponse(
                     responseCode = "200",
