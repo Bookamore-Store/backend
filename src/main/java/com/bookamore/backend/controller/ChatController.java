@@ -8,7 +8,7 @@ import com.bookamore.backend.dto.chat.ChatMessageResponse;
 import com.bookamore.backend.dto.chat.ChatReadRequest;
 import com.bookamore.backend.dto.chat.ChatReadResponse;
 import com.bookamore.backend.dto.chat.ChatUnreadCountResponse;
-import com.bookamore.backend.entity.enums.ChatParticipantRole;
+import com.bookamore.backend.dto.chat.ChatParticipantRole;
 import com.bookamore.backend.service.ChatService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

@@ -12,7 +12,7 @@ import com.bookamore.backend.entity.ChatConversation;
 import com.bookamore.backend.entity.ChatMessage;
 import com.bookamore.backend.entity.Offer;
 import com.bookamore.backend.entity.User;
-import com.bookamore.backend.entity.enums.ChatParticipantRole;
+import com.bookamore.backend.dto.chat.ChatParticipantRole;
 import com.bookamore.backend.entity.enums.OfferStatus;
 import com.bookamore.backend.exception.BadRequestException;
 import com.bookamore.backend.exception.ResourceNotFoundException;

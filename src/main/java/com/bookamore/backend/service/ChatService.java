@@ -8,7 +8,7 @@ import com.bookamore.backend.dto.chat.ChatMessageResponse;
 import com.bookamore.backend.dto.chat.ChatReadResponse;
 import com.bookamore.backend.dto.chat.ChatStartRequest;
 import com.bookamore.backend.dto.chat.ChatUnreadCountResponse;
-import com.bookamore.backend.entity.enums.ChatParticipantRole;
+import com.bookamore.backend.dto.chat.ChatParticipantRole;
 import org.springframework.data.domain.Page;
 
 import java.util.UUID;

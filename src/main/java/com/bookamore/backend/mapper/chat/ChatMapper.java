@@ -12,7 +12,7 @@ import com.bookamore.backend.entity.ChatConversation;
 import com.bookamore.backend.entity.ChatMessage;
 import com.bookamore.backend.entity.Offer;
 import com.bookamore.backend.entity.User;
-import com.bookamore.backend.entity.enums.ChatParticipantRole;
+import com.bookamore.backend.dto.chat.ChatParticipantRole;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingConstants;
