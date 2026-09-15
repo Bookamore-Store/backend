@@ -1,6 +1,6 @@
 package com.bookamore.backend.controller;
 
-import com.bookamore.backend.dto.chat.ChatConversationDetailResponse;
+import com.bookamore.backend.dto.chat.ChatInboxItemResponse;
 import com.bookamore.backend.dto.chat.ChatStartRequest;
 import com.bookamore.backend.service.ChatService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -38,7 +38,7 @@ public class OfferConversationsController {
                     description = "Conversation found or created",
                     content = @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
-                            schema = @Schema(implementation = ChatConversationDetailResponse.class)
+                            schema = @Schema(implementation = ChatInboxItemResponse.class)
                     )
             ),
             @ApiResponse(responseCode = "400",
@@ -48,7 +48,7 @@ public class OfferConversationsController {
                     description = "Seller cannot start a conversation with themselves or offer is not OPEN")
     })
     @PostMapping("/{offerId}/conversations")
-    public ResponseEntity<ChatConversationDetailResponse> getOrCreate(
+    public ResponseEntity<ChatInboxItemResponse> getOrCreate(
             @PathVariable UUID offerId,
             @Validated @RequestBody ChatStartRequest request) {
         return ResponseEntity.ok(chatService.getOrCreateForOffer(offerId, request));

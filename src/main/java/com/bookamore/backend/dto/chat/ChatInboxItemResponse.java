@@ -15,8 +15,8 @@ public class ChatInboxItemResponse {
     @Schema(example = "d367ec63-a73b-485d-a1c8-6b793b009e53", description = "Conversation id")
     private UUID id;
 
-    @Schema(description = "Offer summary")
-    private ChatInboxOfferResponse offer;
+    @Schema(description = "Offer this conversation belongs to")
+    private ChatOfferDetailResponse offer;
 
     @Schema(description = "The other participant in this conversation")
     private ChatParticipantResponse counterpart;

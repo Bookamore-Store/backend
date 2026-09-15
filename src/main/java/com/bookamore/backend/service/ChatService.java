@@ -1,6 +1,5 @@
 package com.bookamore.backend.service;
 
-import com.bookamore.backend.dto.chat.ChatConversationDetailResponse;
 import com.bookamore.backend.dto.chat.ChatInboxItemResponse;
 import com.bookamore.backend.dto.chat.ChatMessageListQuery;
 import com.bookamore.backend.dto.chat.ChatMessageListResponse;
@@ -16,7 +15,7 @@ import java.util.UUID;
 
 public interface ChatService {
 
-    ChatConversationDetailResponse getOrCreateForOffer(UUID offerId, ChatStartRequest request);
+    ChatInboxItemResponse getOrCreateForOffer(UUID offerId, ChatStartRequest request);
 
     Page<ChatInboxItemResponse> listInbox(Integer page, Integer size, ChatParticipantRole role);
 

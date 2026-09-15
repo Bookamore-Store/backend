@@ -1,6 +1,5 @@
 package com.bookamore.backend.service.impl;
 
-import com.bookamore.backend.dto.chat.ChatConversationDetailResponse;
 import com.bookamore.backend.dto.chat.ChatInboxItemResponse;
 import com.bookamore.backend.dto.chat.ChatMessageListQuery;
 import com.bookamore.backend.dto.chat.ChatMessageListResponse;
@@ -53,9 +52,9 @@ public class ChatServiceImpl implements ChatService {
 
     private static final int DEFAULT_INBOX_SIZE = 20;
     private static final int MAX_INBOX_SIZE = 50;
-    private static final int DEFAULT_MESSAGE_LIMIT = 50;
+    private static final int DEFAULT_MESSAGE_LIMIT = 20;
     private static final int MAX_MESSAGE_LIMIT = 100;
-    private static final int PREVIEW_MAX_LENGTH = 255;
+    private static final int PREVIEW_MAX_LENGTH = 80;
 
     private final ChatConversationRepository conversationRepository;
     private final ChatMessageRepository messageRepository;
@@ -66,7 +65,7 @@ public class ChatServiceImpl implements ChatService {
     private final Validator validator;
 
     @Override
-    public ChatConversationDetailResponse getOrCreateForOffer(UUID offerId, ChatStartRequest request) {
+    public ChatInboxItemResponse getOrCreateForOffer(UUID offerId, ChatStartRequest request) {
         UUID userId = SecurityUtils.requireAuthenticatedUserId();
         validateDto(request);
 
@@ -82,7 +81,7 @@ public class ChatServiceImpl implements ChatService {
         Optional<ChatConversation> existing = conversationRepository.findByOfferIdAndBuyerId(offerId, userId);
         if (existing.isPresent()) {
             appendInitialMessageIfPresent(existing.get().getId(), userId, initialMessage);
-            return toDetailForOffer(offerId, userId);
+            return chatMapper.toInboxItem(existing.get(), userId);
         }
 
         if (offer.getStatus() != OfferStatus.OPEN) {
@@ -102,8 +101,14 @@ public class ChatServiceImpl implements ChatService {
                     .ifPresent(conversation ->
                             appendInitialMessageIfPresent(conversation.getId(), userId, initialMessage));
         }
+        return getInboxItemForOffer(offerId, userId);
+    }
 
-        return toDetailForOffer(offerId, userId);
+    private ChatInboxItemResponse getInboxItemForOffer(UUID offerId, UUID userId) {
+        return conversationRepository.findByOfferIdAndBuyerId(offerId, userId)
+            .map(conversation -> chatMapper.toInboxItem(conversation, userId))
+            .orElseThrow(() -> new ResourceNotFoundException(
+                "Conversation not found for offer " + offerId + " and buyer " + userId));
     }
 
     @Override
@@ -207,12 +212,6 @@ public class ChatServiceImpl implements ChatService {
         }
         conversationRepository.saveAndFlush(conversation);
         return new ChatReadResponse(conversationId, remaining);
-    }
-
-    private ChatConversationDetailResponse toDetailForOffer(UUID offerId, UUID userId) {
-        return conversationRepository.findByOfferIdAndBuyerId(offerId, userId)
-                .map(conversation -> chatMapper.toDetail(conversation, userId))
-                .orElseThrow(() -> new ResourceNotFoundException("Offer not found with id: " + offerId));
     }
 
     private void appendInitialMessageIfPresent(UUID conversationId, UUID senderId, String initialMessage) {

@@ -1,9 +1,7 @@
 package com.bookamore.backend.mapper.chat;
 
 import com.bookamore.backend.dto.chat.ChatBookSummaryResponse;
-import com.bookamore.backend.dto.chat.ChatConversationDetailResponse;
 import com.bookamore.backend.dto.chat.ChatInboxItemResponse;
-import com.bookamore.backend.dto.chat.ChatInboxOfferResponse;
 import com.bookamore.backend.dto.chat.ChatMessageResponse;
 import com.bookamore.backend.dto.chat.ChatOfferDetailResponse;
 import com.bookamore.backend.dto.chat.ChatParticipantResponse;
@@ -27,18 +25,9 @@ public interface ChatMapper {
 
     ChatOfferDetailResponse toOfferDetail(Offer offer);
 
-    @Mapping(target = "id", source = "offer.id")
-    @Mapping(target = "price", source = "offer.price")
-    @Mapping(target = "bookTitle", source = "offer.book.title")
-    ChatInboxOfferResponse toInboxOffer(ChatConversation conversation);
-
     @Mapping(target = "role", ignore = true)
     ChatParticipantResponse toParticipant(User user);
 
-    @Mapping(target = "unreadCount", ignore = true)
-    ChatConversationDetailResponse toDetailBase(ChatConversation conversation);
-
-    @Mapping(target = "offer", source = ".")
     @Mapping(target = "counterpart", ignore = true)
     @Mapping(target = "unreadCount", ignore = true)
     ChatInboxItemResponse toInboxItemBase(ChatConversation conversation);
@@ -48,12 +37,6 @@ public interface ChatMapper {
     ChatMessageResponse toMessage(ChatMessage message);
 
     List<ChatMessageResponse> toMessages(List<ChatMessage> messages);
-
-    default ChatConversationDetailResponse toDetail(ChatConversation conversation, UUID currentUserId) {
-        ChatConversationDetailResponse response = toDetailBase(conversation);
-        response.setUnreadCount(unreadCount(conversation, currentUserId));
-        return response;
-    }
 
     default ChatInboxItemResponse toInboxItem(ChatConversation conversation, UUID currentUserId) {
         ChatInboxItemResponse response = toInboxItemBase(conversation);
