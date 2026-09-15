@@ -41,9 +41,6 @@ jobs:
       # Профіль local чекає на хост bookamore-db (ім'я сервіса в compose) —
       # на раннері база доступна як localhost.
       SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/bookamore-db
-      # FileInitializer валідує кореневу теку завантажень на старті контексту
-      # і не створює її сам; /app/uploads на раннері не існує.
-      FILE_UPLOAD_DIR: ${{ runner.temp }}/uploads
 
     steps:
       - uses: actions/checkout@v4
@@ -54,7 +51,16 @@ jobs:
           java-version: '17'
           cache: maven
 
+      # FileInitializer валідує кореневу теку завантажень на старті контексту
+      # і не створює її сам; /app/uploads на раннері не існує.
+      #
+      # RUNNER_TEMP, а не робоча тека: застосунок сам створить усередині
+      # підтеки book/ і offer/, а смітити ними в чекаут немає потреби.
+      # Контекст runner недоступний у job-level env — лише на рівні кроку,
+      # інакше GitHub відхиляє весь файл як невалідний.
       - name: Prepare upload root
-        run: mkdir -p "$FILE_UPLOAD_DIR"
+        run: mkdir -p "$RUNNER_TEMP/uploads"
 
       - run: ./mvnw -B test
+        env:
+          FILE_UPLOAD_DIR: ${{ runner.temp }}/uploads
