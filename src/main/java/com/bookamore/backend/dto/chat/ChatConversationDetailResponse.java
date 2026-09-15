@@ -18,10 +18,16 @@ public class ChatConversationDetailResponse {
     @Schema(description = "Offer this conversation belongs to")
     private ChatOfferDetailResponse offer;
 
-    @Schema(description = "Seller participant")
+    @Schema(description = "Seller participant",
+            example = """
+                    {"id":"018d4f1a-5b03-71d4-a716-446655440001","name":"John","avatarUrl":"https://cdn.example.com/avatars/john.png","role":"SELLER"}
+                    """)
     private ChatParticipantResponse seller;
 
-    @Schema(description = "Buyer participant")
+    @Schema(description = "Buyer participant",
+            example = """
+                    {"id":"018d4f1a-5b03-71d4-a716-446655440002","name":"Jane","avatarUrl":"https://cdn.example.com/avatars/jane.png","role":"BUYER"}
+                    """)
     private ChatParticipantResponse buyer;
 
     @Schema(example = "2026-03-20T14:30:00", description = "Timestamp of the last message")

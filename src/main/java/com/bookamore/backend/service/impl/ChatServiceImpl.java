@@ -2,6 +2,7 @@ package com.bookamore.backend.service.impl;
 
 import com.bookamore.backend.dto.chat.ChatConversationDetailResponse;
 import com.bookamore.backend.dto.chat.ChatInboxItemResponse;
+import com.bookamore.backend.dto.chat.ChatMessageListQuery;
 import com.bookamore.backend.dto.chat.ChatMessageListResponse;
 import com.bookamore.backend.dto.chat.ChatMessageRequest;
 import com.bookamore.backend.dto.chat.ChatMessageResponse;
@@ -14,8 +15,8 @@ import com.bookamore.backend.entity.Offer;
 import com.bookamore.backend.entity.User;
 import com.bookamore.backend.dto.chat.ChatParticipantRole;
 import com.bookamore.backend.entity.enums.OfferStatus;
-import com.bookamore.backend.exception.BadRequestException;
 import com.bookamore.backend.exception.ResourceNotFoundException;
+import com.bookamore.backend.exception.UnprocessableRequestException;
 import com.bookamore.backend.mapper.chat.ChatMapper;
 import com.bookamore.backend.repository.ChatConversationRepository;
 import com.bookamore.backend.repository.ChatMessageRepository;
@@ -23,6 +24,9 @@ import com.bookamore.backend.repository.OfferRepository;
 import com.bookamore.backend.repository.UserRepository;
 import com.bookamore.backend.service.ChatService;
 import com.bookamore.backend.util.SecurityUtils;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -39,6 +43,7 @@ import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -51,7 +56,6 @@ public class ChatServiceImpl implements ChatService {
     private static final int DEFAULT_MESSAGE_LIMIT = 50;
     private static final int MAX_MESSAGE_LIMIT = 100;
     private static final int PREVIEW_MAX_LENGTH = 255;
-    private static final int CONTENT_MAX_LENGTH = 2000;
 
     private final ChatConversationRepository conversationRepository;
     private final ChatMessageRepository messageRepository;
@@ -59,24 +63,21 @@ public class ChatServiceImpl implements ChatService {
     private final UserRepository userRepository;
     private final ChatMapper chatMapper;
     private final PlatformTransactionManager transactionManager;
+    private final Validator validator;
 
     @Override
     public ChatConversationDetailResponse getOrCreateForOffer(UUID offerId, ChatStartRequest request) {
         UUID userId = SecurityUtils.requireAuthenticatedUserId();
+        validateDto(request);
+
         Offer offer = offerRepository.findById(offerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Offer not found with id: " + offerId));
 
         if (offer.getUser().getId().equals(userId)) {
-            throw new BadRequestException("Seller cannot start a conversation with themselves");
+            throw new UnprocessableRequestException("Seller cannot start a conversation with themselves");
         }
 
-        String initialMessage = request != null ? request.getInitialMessage() : null;
-        if (initialMessage != null) {
-            if (!StringUtils.hasText(initialMessage)) {
-                throw new BadRequestException("Initial message cannot be blank");
-            }
-            validateContentLength(initialMessage);
-        }
+        String initialMessage = request.getInitialMessage();
 
         Optional<ChatConversation> existing = conversationRepository.findByOfferIdAndBuyerId(offerId, userId);
         if (existing.isPresent()) {
@@ -85,7 +86,7 @@ public class ChatServiceImpl implements ChatService {
         }
 
         if (offer.getStatus() != OfferStatus.OPEN) {
-            throw new BadRequestException("Cannot start a conversation on a non-OPEN offer");
+            throw new UnprocessableRequestException("Cannot start a conversation on a non-OPEN offer");
         }
 
         User buyer = userRepository.findById(userId)
@@ -131,11 +132,13 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     @Transactional(readOnly = true)
-    public ChatMessageListResponse listMessages(UUID conversationId, UUID after, UUID before, Integer limit) {
+    public ChatMessageListResponse listMessages(UUID conversationId, ChatMessageListQuery query) {
         UUID userId = SecurityUtils.requireAuthenticatedUserId();
-        if (after != null && before != null) {
-            throw new BadRequestException("after and before cannot be used together");
-        }
+        validateDto(query);
+
+        UUID after = query.getAfter();
+        UUID before = query.getBefore();
+        Integer limit = query.getLimit();
 
         conversationRepository.findByIdAndParticipant(conversationId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
@@ -162,14 +165,18 @@ public class ChatServiceImpl implements ChatService {
     @Override
     @Transactional
     public ChatMessageResponse sendMessage(UUID conversationId, ChatMessageRequest request) {
-        UUID userId = SecurityUtils.requireAuthenticatedUserId();
-        if (request == null) {
-            throw new BadRequestException("Message content cannot be blank");
-        }
-        validateContent(request.getContent());
+        validateDto(request);
 
+        UUID userId = SecurityUtils.requireAuthenticatedUserId();
         ChatMessage message = persistParticipantMessage(conversationId, userId, request.getContent());
         return chatMapper.toMessage(message);
+    }
+
+    private void validateDto(Object dto) {
+        Set<ConstraintViolation<Object>> violations = validator.validate(dto);
+        if (!violations.isEmpty()) {
+            throw new ConstraintViolationException(violations);
+        }
     }
 
     @Override
@@ -260,19 +267,6 @@ public class ChatServiceImpl implements ChatService {
             conversation.setSellerUnreadCount(conversation.getSellerUnreadCount() + 1);
         } else {
             conversation.setBuyerUnreadCount(conversation.getBuyerUnreadCount() + 1);
-        }
-    }
-
-    private void validateContent(String content) {
-        if (!StringUtils.hasText(content)) {
-            throw new BadRequestException("Message content cannot be blank");
-        }
-        validateContentLength(content);
-    }
-
-    private void validateContentLength(String content) {
-        if (content.length() > CONTENT_MAX_LENGTH) {
-            throw new BadRequestException("Message content must be at most 2000 characters");
         }
     }
 

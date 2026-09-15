@@ -2,6 +2,7 @@ package com.bookamore.backend.controller;
 
 import com.bookamore.backend.annotation.No404Swgr;
 import com.bookamore.backend.dto.chat.ChatInboxItemResponse;
+import com.bookamore.backend.dto.chat.ChatMessageListQuery;
 import com.bookamore.backend.dto.chat.ChatMessageListResponse;
 import com.bookamore.backend.dto.chat.ChatMessageRequest;
 import com.bookamore.backend.dto.chat.ChatMessageResponse;
@@ -17,6 +18,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -99,13 +101,8 @@ public class ChatController {
     })
     @GetMapping("/{conversationId}/messages")
     public ChatMessageListResponse listMessages(@PathVariable UUID conversationId,
-                                                @Parameter(description = "Return messages newer than this id (cannot be used with `before`)")
-                                                @RequestParam(required = false) UUID after,
-                                                @Parameter(description = "Return messages older than this id (cannot be used with `after`)")
-                                                @RequestParam(required = false) UUID before,
-                                                @Parameter(description = "Max messages to return (default 50, max 100)")
-                                                @RequestParam(required = false) Integer limit) {
-        return chatService.listMessages(conversationId, after, before, limit);
+                                                @Validated @ParameterObject ChatMessageListQuery query) {
+        return chatService.listMessages(conversationId, query);
     }
 
     @Operation(summary = "Send message",

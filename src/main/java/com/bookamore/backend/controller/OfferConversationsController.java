@@ -29,8 +29,8 @@ public class OfferConversationsController {
 
     @Operation(summary = "Get or create conversation for offer",
             description = "Returns the existing conversation for the authenticated buyer and offer, or creates one. "
-                    + "If initialMessage is present and the conversation already exists, it is appended as a new buyer "
-                    + "message (same as sending to the thread). Always 200 (get-or-create, not 201). "
+                    + "initialMessage is required. If the conversation already exists, the message is appended "
+                    + "as a new buyer message (same as sending to the thread). Always 200 (get-or-create, not 201). "
                     + "Seller cannot start a chat with themselves. Requires JWT.")
     @ApiResponses(value = {
             @ApiResponse(
@@ -42,13 +42,15 @@ public class OfferConversationsController {
                     )
             ),
             @ApiResponse(responseCode = "400",
-                    description = "Seller cannot start a conversation with themselves, offer is not OPEN, or initial message is invalid"),
-            @ApiResponse(responseCode = "404", description = "Offer not found")
+                    description = "Initial message is blank or longer than 2000 characters"),
+            @ApiResponse(responseCode = "404", description = "Offer not found"),
+            @ApiResponse(responseCode = "422",
+                    description = "Seller cannot start a conversation with themselves or offer is not OPEN")
     })
     @PostMapping("/{offerId}/conversations")
     public ResponseEntity<ChatConversationDetailResponse> getOrCreate(
             @PathVariable UUID offerId,
-            @Validated @RequestBody(required = false) ChatStartRequest request) {
+            @Validated @RequestBody ChatStartRequest request) {
         return ResponseEntity.ok(chatService.getOrCreateForOffer(offerId, request));
     }
 }

@@ -2,6 +2,7 @@ package com.bookamore.backend.service;
 
 import com.bookamore.backend.dto.chat.ChatConversationDetailResponse;
 import com.bookamore.backend.dto.chat.ChatInboxItemResponse;
+import com.bookamore.backend.dto.chat.ChatMessageListQuery;
 import com.bookamore.backend.dto.chat.ChatMessageListResponse;
 import com.bookamore.backend.dto.chat.ChatMessageRequest;
 import com.bookamore.backend.dto.chat.ChatMessageResponse;
@@ -21,7 +22,7 @@ public interface ChatService {
 
     ChatUnreadCountResponse getUnreadCount(ChatParticipantRole role);
 
-    ChatMessageListResponse listMessages(UUID conversationId, UUID after, UUID before, Integer limit);
+    ChatMessageListResponse listMessages(UUID conversationId, ChatMessageListQuery query);
 
     ChatMessageResponse sendMessage(UUID conversationId, ChatMessageRequest request);
 

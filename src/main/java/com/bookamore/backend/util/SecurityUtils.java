@@ -1,6 +1,6 @@
 package com.bookamore.backend.util;
 
-import com.bookamore.backend.exception.BadRequestException;
+import com.bookamore.backend.exception.UnauthorizedAccessException;
 import com.bookamore.backend.jwt.JwtUserDetails;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
@@ -32,7 +32,7 @@ public final class SecurityUtils {
     public static UUID requireAuthenticatedUserId() {
         UUID userId = getAuthenticatedUserId();
         if (userId == null) {
-            throw new BadRequestException("Authenticated user is required");
+            throw new UnauthorizedAccessException("Authenticated user is required");
         }
         return userId;
     }

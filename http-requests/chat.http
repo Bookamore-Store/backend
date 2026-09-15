@@ -158,7 +158,37 @@ Content-Type: application/json
     });
 %}
 
-### 7. Create conversation as seller (expect 400)
+### 7. Start conversation with blank initialMessage (expect 400)
+< {%
+    const token = client.global.get("buyerToken");
+    if (!token) {
+        throw new Error("buyerToken is empty — run '1. Login buyer' first");
+    }
+    request.variables.set("buyerToken", token);
+%}
+POST {{host}}/api/v1/offers/{{offerId}}/conversations
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "initialMessage": ""
+}
+
+> {%
+    client.test("status 400", function() {
+        client.assert(response.status === 400, "Expected 400 for blank initialMessage");
+    });
+    client.test("message mentions initial message", function() {
+        const message = response.body && response.body.message;
+        if (message) {
+            client.assert(String(message).toLowerCase().indexOf("blank") !== -1
+                || String(message).toLowerCase().indexOf("initial") !== -1,
+                "Expected validation message about blank initial message");
+        }
+    });
+%}
+
+### 8. Create conversation as seller (expect 422)
 < {%
     const token = client.global.get("sellerToken");
     if (!token) {
@@ -175,8 +205,8 @@ Content-Type: application/json
 }
 
 > {%
-    client.test("status 400", function() {
-        client.assert(response.status === 400, "Expected 400");
+    client.test("status 422", function() {
+        client.assert(response.status === 422, "Expected 422");
     });
     client.test("message mentions themselves", function() {
         const message = response.body && response.body.message;
@@ -186,7 +216,7 @@ Content-Type: application/json
     });
 %}
 
-### 8. Reset read as buyer
+### 9. Reset read as buyer
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -211,7 +241,7 @@ Authorization: Bearer {{buyerToken}}
     });
 %}
 
-### 9. Reset read as seller
+### 10. Reset read as seller
 < {%
     const token = client.global.get("sellerToken");
     if (!token) {
@@ -236,7 +266,7 @@ Authorization: Bearer {{sellerToken}}
     });
 %}
 
-### 10. Inbox as buyer (role=BUYER)
+### 11. Inbox as buyer (role=BUYER)
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -286,7 +316,7 @@ Authorization: Bearer {{buyerToken}}
     }
 %}
 
-### 11. Inbox as seller (role=SELLER)
+### 12. Inbox as seller (role=SELLER)
 < {%
     const token = client.global.get("sellerToken");
     if (!token) {
@@ -336,7 +366,7 @@ Authorization: Bearer {{sellerToken}}
     }
 %}
 
-### 12. Inbox as buyer (role=SELLER) hides this conversation
+### 13. Inbox as buyer (role=SELLER) hides this conversation
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -375,7 +405,7 @@ Authorization: Bearer {{buyerToken}}
     });
 %}
 
-### 13. Inbox invalid role (expect 400)
+### 14. Inbox invalid role (expect 400)
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -392,7 +422,7 @@ Authorization: Bearer {{buyerToken}}
     });
 %}
 
-### 14. List messages as buyer
+### 15. List messages as buyer
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -443,7 +473,7 @@ Authorization: Bearer {{buyerToken}}
     }
 %}
 
-### 15. Unread count as seller (role=SELLER)
+### 16. Unread count as seller (role=SELLER)
 < {%
     const token = client.global.get("sellerToken");
     if (!token) {
@@ -468,7 +498,7 @@ Authorization: Bearer {{sellerToken}}
     }
 %}
 
-### 16. Unread count as buyer (role=BUYER)
+### 17. Unread count as buyer (role=BUYER)
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -493,7 +523,7 @@ Authorization: Bearer {{buyerToken}}
     }
 %}
 
-### 17. Unread count invalid role (expect 400)
+### 18. Unread count invalid role (expect 400)
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -510,7 +540,7 @@ Authorization: Bearer {{buyerToken}}
     });
 %}
 
-### 18. Send message as seller
+### 19. Send message as seller
 < {%
     const token = client.global.get("sellerToken");
     if (!token) {
@@ -553,7 +583,7 @@ Content-Type: application/json
     }
 %}
 
-### 19. Unread count as buyer increased after seller reply
+### 20. Unread count as buyer increased after seller reply
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -575,7 +605,7 @@ Authorization: Bearer {{buyerToken}}
     });
 %}
 
-### 20. Inbox as buyer shows unread and keeps this chat first among unread
+### 21. Inbox as buyer shows unread and keeps this chat first among unread
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -635,7 +665,7 @@ Authorization: Bearer {{buyerToken}}
     }
 %}
 
-### 21. Send message as buyer
+### 22. Send message as buyer
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -669,7 +699,7 @@ Content-Type: application/json
     }
 %}
 
-### 22. Send blank message (expect 400)
+### 23. Send blank message (expect 400)
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -696,7 +726,7 @@ Content-Type: application/json
     });
 %}
 
-### 23. Send message as stranger (expect 404)
+### 24. Send message as stranger (expect 404)
 < {%
     const token = client.global.get("strangerToken");
     if (!token) {
@@ -723,7 +753,7 @@ Content-Type: application/json
     });
 %}
 
-### 24. Send message to unknown conversation (expect 404)
+### 25. Send message to unknown conversation (expect 404)
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -745,7 +775,7 @@ Content-Type: application/json
     });
 %}
 
-### 25. List messages after last known id (polling)
+### 26. List messages after last known id (polling)
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -757,7 +787,7 @@ Content-Type: application/json
     }
     const after = client.global.get("sellerReplyId");
     if (!after) {
-        throw new Error("sellerReplyId is empty — run '18. Send message as seller' first");
+        throw new Error("sellerReplyId is empty — run '19. Send message as seller' first");
     }
     request.variables.set("buyerToken", token);
     request.variables.set("conversationId", conversationId);
@@ -793,7 +823,7 @@ Authorization: Bearer {{buyerToken}}
     }
 %}
 
-### 26. List messages before first id (history)
+### 27. List messages before first id (history)
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -831,7 +861,7 @@ Authorization: Bearer {{buyerToken}}
     }
 %}
 
-### 27. List messages after and before together (expect 400)
+### 28. List messages after and before together (expect 400)
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -861,7 +891,7 @@ Authorization: Bearer {{buyerToken}}
     });
 %}
 
-### 28. List messages as stranger (expect 404)
+### 29. List messages as stranger (expect 404)
 < {%
     const token = client.global.get("strangerToken");
     if (!token) {
@@ -883,7 +913,7 @@ Authorization: Bearer {{strangerToken}}
     });
 %}
 
-### 29. List messages for unknown conversation (expect 404)
+### 30. List messages for unknown conversation (expect 404)
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -900,7 +930,7 @@ Authorization: Bearer {{buyerToken}}
     });
 %}
 
-### 30. Mark as read as seller (full)
+### 31. Mark as read as seller (full)
 < {%
     const token = client.global.get("sellerToken");
     if (!token) {
@@ -926,7 +956,7 @@ Authorization: Bearer {{sellerToken}}
     });
 %}
 
-### 31. Mark as read as buyer (full)
+### 32. Mark as read as buyer (full)
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -951,7 +981,7 @@ Authorization: Bearer {{buyerToken}}
     });
 %}
 
-### 32. Unread count as buyer after full read
+### 33. Unread count as buyer after full read
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -975,7 +1005,7 @@ Authorization: Bearer {{buyerToken}}
     }
 %}
 
-### 33. Send first unread message as seller (for partial read)
+### 34. Send first unread message as seller (for partial read)
 < {%
     const token = client.global.get("sellerToken");
     if (!token) {
@@ -1005,7 +1035,7 @@ Content-Type: application/json
     }
 %}
 
-### 34. Send second unread message as seller (for partial read)
+### 35. Send second unread message as seller (for partial read)
 < {%
     const token = client.global.get("sellerToken");
     if (!token) {
@@ -1035,7 +1065,7 @@ Content-Type: application/json
     }
 %}
 
-### 35. Mark as read as buyer up to first new message
+### 36. Mark as read as buyer up to first new message
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -1044,7 +1074,7 @@ Content-Type: application/json
     const conversationId = client.global.get("conversationId");
     const upToMessageId = client.global.get("partialReadFirstId");
     if (!conversationId || !upToMessageId) {
-        throw new Error("Need conversationId and partialReadFirstId — run steps 33–34 first");
+        throw new Error("Need conversationId and partialReadFirstId — run steps 34–35 first");
     }
     request.variables.set("buyerToken", token);
     request.variables.set("conversationId", conversationId);
@@ -1068,7 +1098,7 @@ Content-Type: application/json
     });
 %}
 
-### 36. Mark as read as buyer (rest of thread)
+### 37. Mark as read as buyer (rest of thread)
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -1093,7 +1123,7 @@ Authorization: Bearer {{buyerToken}}
     });
 %}
 
-### 37. Mark as read as stranger (expect 404)
+### 38. Mark as read as stranger (expect 404)
 < {%
     const token = client.global.get("strangerToken");
     if (!token) {
@@ -1115,7 +1145,7 @@ Authorization: Bearer {{strangerToken}}
     });
 %}
 
-### 38. Mark as read unknown conversation (expect 404)
+### 39. Mark as read unknown conversation (expect 404)
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -1132,7 +1162,7 @@ Authorization: Bearer {{buyerToken}}
     });
 %}
 
-### 39. Mark as read unknown message id (expect 404)
+### 40. Mark as read unknown message id (expect 404)
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
