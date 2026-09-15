@@ -1,0 +1,66 @@
+name: PR checks
+
+# build.yml збирає образ уже після мержу, на push у main/dev — на самому PR
+# не запускається нічого. Без цього workflow у main немає жодного статусу,
+# який можна зробити обов'язковим у branch protection.
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+
+# Кожен новий пуш у гілку PR скасовує попередній прогін: перевіряти застарілий
+# коміт немає сенсу, а хвилини раннера спільні на всю організацію.
+concurrency:
+  group: pr-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # BackendApplicationTests — це @SpringBootTest: піднімається весь контекст,
+    # Liquibase проганяє чейнджлог, тож без живої бази тест падає на
+    # UnknownHostException, а не на власне коді.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: bookamore-db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Профіль local чекає на хост bookamore-db (ім'я сервіса в compose) —
+      # на раннері база доступна як localhost.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/bookamore-db
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      # FileInitializer валідує кореневу теку завантажень на старті контексту
+      # і не створює її сам; /app/uploads на раннері не існує.
+      #
+      # RUNNER_TEMP, а не робоча тека: застосунок сам створить усередині
+      # підтеки book/ і offer/, а смітити ними в чекаут немає потреби.
+      # Контекст runner недоступний у job-level env — лише на рівні кроку,
+      # інакше GitHub відхиляє весь файл як невалідний.
+      - name: Prepare upload root
+        run: mkdir -p "$RUNNER_TEMP/uploads"
+
+      - run: ./mvnw -B test
+        env:
+          FILE_UPLOAD_DIR: ${{ runner.temp }}/uploads
