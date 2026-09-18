@@ -6,7 +6,6 @@ import com.bookamore.backend.dto.chat.ChatMessageListResponse;
 import com.bookamore.backend.dto.chat.ChatMessageRequest;
 import com.bookamore.backend.dto.chat.ChatMessageResponse;
 import com.bookamore.backend.dto.chat.ChatReadResponse;
-import com.bookamore.backend.dto.chat.ChatStartRequest;
 import com.bookamore.backend.dto.chat.ChatUnreadCountResponse;
 import com.bookamore.backend.dto.chat.ChatParticipantRole;
 import org.springframework.data.domain.Page;
@@ -15,7 +14,11 @@ import java.util.UUID;
 
 public interface ChatService {
 
-    ChatInboxItemResponse getOrCreateForOffer(UUID offerId, ChatStartRequest request);
+    ChatMessageListResponse listMessagesForOffer(UUID offerId, ChatMessageListQuery query);
+
+    ChatMessageResponse sendMessageForOffer(UUID offerId, ChatMessageRequest request);
+
+    ChatReadResponse markAsReadForOffer(UUID offerId, UUID upToMessageId);
 
     Page<ChatInboxItemResponse> listInbox(Integer page, Integer size, ChatParticipantRole role);
 

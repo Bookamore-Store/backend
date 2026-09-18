@@ -6,15 +6,11 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
-import java.util.UUID;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class ChatMessageListResponse {
-    @Schema(example = "d367ec63-a73b-485d-a1c8-6b793b009e53", description = "Conversation id")
-    private UUID conversationId;
-
     @Schema(description = "Messages in chronological order")
     private List<ChatMessageResponse> messages;
 }

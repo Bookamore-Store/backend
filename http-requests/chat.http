@@ -115,7 +115,7 @@ Authorization: Bearer {{sellerToken}}
     }
 %}
 
-### 6. Create conversation (buyer + initialMessage)
+### 6. Send first message as buyer (creates conversation)
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -123,12 +123,12 @@ Authorization: Bearer {{sellerToken}}
     }
     request.variables.set("buyerToken", token);
 %}
-POST {{host}}/api/v1/offers/{{offerId}}/conversations
+POST {{host}}/api/v1/offers/{{offerId}}/messages
 Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 {
-  "initialMessage": "Hi, is this book still available?"
+  "content": "Hi, is this book still available?"
 }
 
 > {%
@@ -137,15 +137,72 @@ Content-Type: application/json
             "Expected 200, got " + response.status + " " + JSON.stringify(response.body));
     });
     if (response.status === 200) {
-        client.global.set("conversationId", response.body.id);
-        client.test("conversation has id", function() {
-            const id = response.body.id;
-            client.assert(id != null && String(id).length > 0, "Expected conversation id");
+        client.global.set("firstMessageId", response.body.id);
+        client.test("message has id", function() {
+            client.assert(response.body.id != null && String(response.body.id).length > 0, "Expected message id");
+        });
+        client.test("sender is buyer Jane", function() {
+            client.assert(String(response.body.senderId) === "018d4f1a-5b03-71d4-a716-446655440002", "Expected Jane's id");
+        });
+        client.test("content matches", function() {
+            client.assert(response.body.content === "Hi, is this book still available?", "Expected sent text");
+        });
+        client.test("isRead is false", function() {
+            client.assert(response.body.isRead === false, "Expected isRead false");
+        });
+        client.test("conversationId is omitted", function() {
+            client.assert(response.body.conversationId == null, "Message must not include conversationId");
+        });
+    }
+%}
+
+### 6b. Resolve conversationId from buyer inbox
+< {%
+    const token = client.global.get("buyerToken");
+    if (!token) {
+        throw new Error("buyerToken is empty — run '1. Login buyer' first");
+    }
+    request.variables.set("buyerToken", token);
+%}
+GET {{host}}/api/v1/conversations?page=0&size=20&role=BUYER
+Authorization: Bearer {{buyerToken}}
+
+> {%
+    function inboxItems(body) {
+        var json = body;
+        if (typeof json === "string") {
+            json = JSON.parse(json);
+        } else {
+            json = JSON.parse(JSON.stringify(json));
+        }
+        return Array.isArray(json.content) ? json.content : [];
+    }
+    client.test("status 200", function() {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    });
+    if (response.status === 200) {
+        const offerId = "018d4f1a-5b03-71d4-e001-000000000001";
+        const list = inboxItems(response.body);
+        let item = null;
+        for (let i = 0; i < list.length; i++) {
+            if (list[i].offer && String(list[i].offer.id) === offerId) {
+                item = list[i];
+                break;
+            }
+        }
+        if (item) {
+            client.global.set("conversationId", item.id);
+        }
+        client.test("inbox contains conversation for this offer", function() {
+            client.assert(item != null, "Expected a conversation for the seed offer");
         });
         client.test("counterpart is the seller", function() {
-            client.assert(response.body.counterpart != null, "Expected counterpart");
-            client.assert(response.body.counterpart.name === "John", "Expected counterpart.name John");
-            client.assert(response.body.counterpart.role === "SELLER", "Expected counterpart.role SELLER");
+            if (!item) {
+                return;
+            }
+            client.assert(item.counterpart != null, "Expected counterpart");
+            client.assert(item.counterpart.name === "John", "Expected counterpart.name John");
+            client.assert(item.counterpart.role === "SELLER", "Expected counterpart.role SELLER");
         });
     }
 %}
@@ -172,7 +229,7 @@ Authorization: Bearer {{sellerToken}}
     });
 %}
 
-### 8. Start again with initialMessage (same chat, new buyer message)
+### 8. Send another message as buyer via offer (same chat)
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -180,29 +237,33 @@ Authorization: Bearer {{sellerToken}}
     }
     request.variables.set("buyerToken", token);
 %}
-POST {{host}}/api/v1/offers/{{offerId}}/conversations
+POST {{host}}/api/v1/offers/{{offerId}}/messages
 Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 {
-  "initialMessage": "This second text should be appended as a new buyer message."
+  "content": "This second text should be appended as a new buyer message."
 }
 
 > {%
     client.test("status 200", function() {
         client.assert(response.status === 200, "Expected 200");
     });
-    client.test("conversation id is unchanged", function() {
-        const expectedId = client.global.get("conversationId");
-        client.assert(String(response.body.id) === String(expectedId), "Expected same conversationId");
-    });
-    client.test("preview is the appended initialMessage", function() {
-        client.assert(response.body.lastMessagePreview === "This second text should be appended as a new buyer message.",
-            "Expected lastMessagePreview of the appended buyer message");
-    });
+    if (response.status === 200) {
+        client.test("content matches", function() {
+            client.assert(response.body.content === "This second text should be appended as a new buyer message.",
+                "Expected second buyer message text");
+        });
+        client.test("sender is buyer Jane", function() {
+            client.assert(String(response.body.senderId) === "018d4f1a-5b03-71d4-a716-446655440002", "Expected Jane's id");
+        });
+        client.test("conversationId is omitted", function() {
+            client.assert(response.body.conversationId == null, "Message must not include conversationId");
+        });
+    }
 %}
 
-### 9. Start conversation with blank initialMessage (expect 400)
+### 9. Send blank message via offer (expect 400)
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
@@ -210,29 +271,29 @@ Content-Type: application/json
     }
     request.variables.set("buyerToken", token);
 %}
-POST {{host}}/api/v1/offers/{{offerId}}/conversations
+POST {{host}}/api/v1/offers/{{offerId}}/messages
 Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
 {
-  "initialMessage": ""
+  "content": ""
 }
 
 > {%
     client.test("status 400", function() {
-        client.assert(response.status === 400, "Expected 400 for blank initialMessage");
+        client.assert(response.status === 400, "Expected 400 for blank content");
     });
-    client.test("message mentions initial message", function() {
+    client.test("message mentions blank content", function() {
         const message = response.body && response.body.message;
         if (message) {
             client.assert(String(message).toLowerCase().indexOf("blank") !== -1
-                || String(message).toLowerCase().indexOf("initial") !== -1,
-                "Expected validation message about blank initial message");
+                || String(message).toLowerCase().indexOf("content") !== -1,
+                "Expected validation message about blank content");
         }
     });
 %}
 
-### 10. Create conversation as seller (expect 422)
+### 10. Send message via offer as seller (expect 422)
 < {%
     const token = client.global.get("sellerToken");
     if (!token) {
@@ -240,12 +301,12 @@ Content-Type: application/json
     }
     request.variables.set("sellerToken", token);
 %}
-POST {{host}}/api/v1/offers/{{offerId}}/conversations
+POST {{host}}/api/v1/offers/{{offerId}}/messages
 Authorization: Bearer {{sellerToken}}
 Content-Type: application/json
 
 {
-  "initialMessage": "I should not be able to chat with myself."
+  "content": "I should not be able to chat with myself."
 }
 
 > {%
@@ -260,20 +321,62 @@ Content-Type: application/json
     });
 %}
 
-### 11. Reset read as buyer
+### 10b. List offer messages as seller (expect 422)
+< {%
+    const token = client.global.get("sellerToken");
+    if (!token) {
+        throw new Error("sellerToken is empty — run '2. Login seller' first");
+    }
+    request.variables.set("sellerToken", token);
+%}
+GET {{host}}/api/v1/offers/{{offerId}}/messages
+Authorization: Bearer {{sellerToken}}
+
+> {%
+    client.test("status 422", function() {
+        client.assert(response.status === 422, "Expected 422 when the offer author lists offer messages");
+    });
+    client.test("message mentions themselves", function() {
+        const message = response.body && response.body.message;
+        if (message) {
+            client.assert(String(message).indexOf("themselves") !== -1, "Expected ErrorResponse.message to mention themselves");
+        }
+    });
+%}
+
+### 10c. List offer messages as stranger (empty list)
+< {%
+    const token = client.global.get("strangerToken");
+    if (!token) {
+        throw new Error("strangerToken is empty — run '3. Login stranger' first");
+    }
+    request.variables.set("strangerToken", token);
+%}
+GET {{host}}/api/v1/offers/{{offerId}}/messages
+Authorization: Bearer {{strangerToken}}
+
+> {%
+    client.test("status 200", function() {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    });
+    client.test("messages is an empty list", function() {
+        client.assert(Array.isArray(response.body.messages), "Expected messages array");
+        client.assert(response.body.messages.length === 0, "Stranger has no chat on this offer");
+    });
+    client.test("conversationId is omitted", function() {
+        client.assert(response.body.conversationId == null, "List must not include conversationId");
+    });
+%}
+
+### 11. Reset read as buyer via offer
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
         throw new Error("buyerToken is empty — run '1. Login buyer' first");
     }
-    const conversationId = client.global.get("conversationId");
-    if (!conversationId) {
-        throw new Error("conversationId is empty — run '6. Create conversation' first");
-    }
     request.variables.set("buyerToken", token);
-    request.variables.set("conversationId", conversationId);
 %}
-POST {{host}}/api/v1/conversations/{{conversationId}}/read
+POST {{host}}/api/v1/offers/{{offerId}}/messages/read
 Authorization: Bearer {{buyerToken}}
 
 > {%
@@ -293,7 +396,7 @@ Authorization: Bearer {{buyerToken}}
     }
     const conversationId = client.global.get("conversationId");
     if (!conversationId) {
-        throw new Error("conversationId is empty — run '6. Create conversation' first");
+        throw new Error("conversationId is empty — run '6b. Resolve conversationId' first");
     }
     request.variables.set("sellerToken", token);
     request.variables.set("conversationId", conversationId);
@@ -356,6 +459,13 @@ Authorization: Bearer {{buyerToken}}
             client.assert(item.counterpart != null, "Expected counterpart");
             client.assert(item.counterpart.name === "John", "Expected counterpart.name John");
             client.assert(item.counterpart.role === "SELLER", "Expected counterpart.role SELLER");
+        });
+        client.test("preview is the second buyer message", function() {
+            if (!item) {
+                return;
+            }
+            client.assert(item.lastMessagePreview === "This second text should be appended as a new buyer message.",
+                "Expected lastMessagePreview of the second buyer message");
         });
     }
 %}
@@ -466,20 +576,15 @@ Authorization: Bearer {{buyerToken}}
     });
 %}
 
-### 17. List messages as buyer
+### 17. List offer messages as buyer
 < {%
     const token = client.global.get("buyerToken");
     if (!token) {
         throw new Error("buyerToken is empty — run '1. Login buyer' first");
     }
-    const conversationId = client.global.get("conversationId");
-    if (!conversationId) {
-        throw new Error("conversationId is empty — run '6. Create conversation' first");
-    }
     request.variables.set("buyerToken", token);
-    request.variables.set("conversationId", conversationId);
 %}
-GET {{host}}/api/v1/conversations/{{conversationId}}/messages?limit=50
+GET {{host}}/api/v1/offers/{{offerId}}/messages?limit=50
 Authorization: Bearer {{buyerToken}}
 
 > {%
@@ -488,11 +593,10 @@ Authorization: Bearer {{buyerToken}}
     });
     if (response.status === 200) {
         const messages = response.body.messages || [];
-        const conversationId = client.global.get("conversationId");
         client.global.set("firstMessageId", messages.length ? messages[0].id : null);
         client.global.set("lastMessageId", messages.length ? messages[messages.length - 1].id : null);
-        client.test("conversationId matches", function() {
-            client.assert(String(response.body.conversationId) === String(conversationId), "Expected same conversationId");
+        client.test("conversationId is omitted", function() {
+            client.assert(response.body.conversationId == null, "List must not include conversationId");
         });
         client.test("at least two messages", function() {
             client.assert(messages.length >= 2, "Expected opening message plus appended start text");
@@ -502,17 +606,22 @@ Authorization: Bearer {{buyerToken}}
                 client.assert(String(messages[i].id) > String(messages[i - 1].id), "Expected ids in ascending UUIDv7 order");
             }
         });
-        client.test("initial message is present", function() {
+        client.test("first buyer message is present", function() {
             const found = messages.some(function(message) {
                 return message.content === "Hi, is this book still available?";
             });
-            client.assert(found, "Expected initial message text");
+            client.assert(found, "Expected first buyer message text");
         });
-        client.test("second start text was appended", function() {
+        client.test("second buyer message was appended", function() {
             const found = messages.some(function(message) {
                 return message.content === "This second text should be appended as a new buyer message.";
             });
-            client.assert(found, "Start on an existing chat must append initialMessage");
+            client.assert(found, "Sending again on an existing chat must append a new message");
+        });
+        client.test("message objects omit conversationId", function() {
+            messages.forEach(function(message) {
+                client.assert(message.conversationId == null, "Message must not include conversationId");
+            });
         });
     }
 %}
@@ -592,7 +701,7 @@ Authorization: Bearer {{buyerToken}}
     }
     const conversationId = client.global.get("conversationId");
     if (!conversationId) {
-        throw new Error("conversationId is empty — run '6. Create conversation' first");
+        throw new Error("conversationId is empty — run '6b. Resolve conversationId' first");
     }
     request.variables.set("sellerToken", token);
     request.variables.set("conversationId", conversationId);
@@ -612,8 +721,8 @@ Content-Type: application/json
     if (response.status === 200) {
         client.global.set("sellerReplyId", response.body.id);
         client.global.set("lastMessageId", response.body.id);
-        client.test("message belongs to this conversation", function() {
-            client.assert(String(response.body.conversationId) === String(client.global.get("conversationId")), "Expected conversationId");
+        client.test("conversationId is omitted", function() {
+            client.assert(response.body.conversationId == null, "Message must not include conversationId");
         });
         client.test("sender is seller John", function() {
             client.assert(String(response.body.senderId) === "018d4f1a-5b03-71d4-a716-446655440001", "Expected John's id");
@@ -717,7 +826,7 @@ Authorization: Bearer {{buyerToken}}
     }
     const conversationId = client.global.get("conversationId");
     if (!conversationId) {
-        throw new Error("conversationId is empty — run '6. Create conversation' first");
+        throw new Error("conversationId is empty — run '6b. Resolve conversationId' first");
     }
     request.variables.set("buyerToken", token);
     request.variables.set("conversationId", conversationId);
@@ -737,6 +846,9 @@ Content-Type: application/json
     if (response.status === 200) {
         client.global.set("buyerReplyId", response.body.id);
         client.global.set("lastMessageId", response.body.id);
+        client.test("conversationId is omitted", function() {
+            client.assert(response.body.conversationId == null, "Message must not include conversationId");
+        });
         client.test("sender is buyer Jane", function() {
             client.assert(String(response.body.senderId) === "018d4f1a-5b03-71d4-a716-446655440002", "Expected Jane's id");
         });
@@ -751,7 +863,7 @@ Content-Type: application/json
     }
     const conversationId = client.global.get("conversationId");
     if (!conversationId) {
-        throw new Error("conversationId is empty — run '6. Create conversation' first");
+        throw new Error("conversationId is empty — run '6b. Resolve conversationId' first");
     }
     request.variables.set("buyerToken", token);
     request.variables.set("conversationId", conversationId);
@@ -778,7 +890,7 @@ Content-Type: application/json
     }
     const conversationId = client.global.get("conversationId");
     if (!conversationId) {
-        throw new Error("conversationId is empty — run '6. Create conversation' first");
+        throw new Error("conversationId is empty — run '6b. Resolve conversationId' first");
     }
     request.variables.set("strangerToken", token);
     request.variables.set("conversationId", conversationId);
@@ -827,7 +939,7 @@ Content-Type: application/json
     }
     const conversationId = client.global.get("conversationId");
     if (!conversationId) {
-        throw new Error("conversationId is empty — run '6. Create conversation' first");
+        throw new Error("conversationId is empty — run '6b. Resolve conversationId' first");
     }
     const after = client.global.get("sellerReplyId");
     if (!after) {
@@ -847,6 +959,9 @@ Authorization: Bearer {{buyerToken}}
     if (response.status === 200) {
         const messages = response.body.messages || [];
         const after = client.global.get("sellerReplyId");
+        client.test("conversationId is omitted", function() {
+            client.assert(response.body.conversationId == null, "List must not include conversationId");
+        });
         client.test("only messages newer than after", function() {
             messages.forEach(function(message) {
                 client.assert(String(message.id) > String(after), "Expected id > after");
@@ -943,7 +1058,7 @@ Authorization: Bearer {{buyerToken}}
     }
     const conversationId = client.global.get("conversationId");
     if (!conversationId) {
-        throw new Error("conversationId is empty — run '6. Create conversation' first");
+        throw new Error("conversationId is empty — run '6b. Resolve conversationId' first");
     }
     request.variables.set("strangerToken", token);
     request.variables.set("conversationId", conversationId);
@@ -982,7 +1097,7 @@ Authorization: Bearer {{buyerToken}}
     }
     const conversationId = client.global.get("conversationId");
     if (!conversationId) {
-        throw new Error("conversationId is empty — run '6. Create conversation' first");
+        throw new Error("conversationId is empty — run '6b. Resolve conversationId' first");
     }
     request.variables.set("sellerToken", token);
     request.variables.set("conversationId", conversationId);
@@ -996,7 +1111,7 @@ Authorization: Bearer {{sellerToken}}
     });
     client.test("seller unreadCount is 0", function() {
         client.assert(response.body.unreadCount === 0, "Expected unreadCount 0 after full read");
-        client.assert(String(response.body.conversationId) === String(client.global.get("conversationId")), "Expected conversationId");
+        client.assert(response.body.conversationId == null, "Read response must not include conversationId");
     });
 %}
 
@@ -1006,14 +1121,9 @@ Authorization: Bearer {{sellerToken}}
     if (!token) {
         throw new Error("buyerToken is empty — run '1. Login buyer' first");
     }
-    const conversationId = client.global.get("conversationId");
-    if (!conversationId) {
-        throw new Error("conversationId is empty — run '6. Create conversation' first");
-    }
     request.variables.set("buyerToken", token);
-    request.variables.set("conversationId", conversationId);
 %}
-POST {{host}}/api/v1/conversations/{{conversationId}}/read
+POST {{host}}/api/v1/offers/{{offerId}}/messages/read
 Authorization: Bearer {{buyerToken}}
 
 > {%
@@ -1057,7 +1167,7 @@ Authorization: Bearer {{buyerToken}}
     }
     const conversationId = client.global.get("conversationId");
     if (!conversationId) {
-        throw new Error("conversationId is empty — run '6. Create conversation' first");
+        throw new Error("conversationId is empty — run '6b. Resolve conversationId' first");
     }
     request.variables.set("sellerToken", token);
     request.variables.set("conversationId", conversationId);
@@ -1087,7 +1197,7 @@ Content-Type: application/json
     }
     const conversationId = client.global.get("conversationId");
     if (!conversationId) {
-        throw new Error("conversationId is empty — run '6. Create conversation' first");
+        throw new Error("conversationId is empty — run '6b. Resolve conversationId' first");
     }
     request.variables.set("sellerToken", token);
     request.variables.set("conversationId", conversationId);
@@ -1115,16 +1225,14 @@ Content-Type: application/json
     if (!token) {
         throw new Error("buyerToken is empty — run '1. Login buyer' first");
     }
-    const conversationId = client.global.get("conversationId");
     const upToMessageId = client.global.get("partialReadFirstId");
-    if (!conversationId || !upToMessageId) {
-        throw new Error("Need conversationId and partialReadFirstId — run steps 36–37 first");
+    if (!upToMessageId) {
+        throw new Error("Need partialReadFirstId — run steps 36–37 first");
     }
     request.variables.set("buyerToken", token);
-    request.variables.set("conversationId", conversationId);
     request.variables.set("upToMessageId", upToMessageId);
 %}
-POST {{host}}/api/v1/conversations/{{conversationId}}/read
+POST {{host}}/api/v1/offers/{{offerId}}/messages/read
 Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 
@@ -1148,14 +1256,9 @@ Content-Type: application/json
     if (!token) {
         throw new Error("buyerToken is empty — run '1. Login buyer' first");
     }
-    const conversationId = client.global.get("conversationId");
-    if (!conversationId) {
-        throw new Error("conversationId is empty — run '6. Create conversation' first");
-    }
     request.variables.set("buyerToken", token);
-    request.variables.set("conversationId", conversationId);
 %}
-POST {{host}}/api/v1/conversations/{{conversationId}}/read
+POST {{host}}/api/v1/offers/{{offerId}}/messages/read
 Authorization: Bearer {{buyerToken}}
 
 > {%
@@ -1175,7 +1278,7 @@ Authorization: Bearer {{buyerToken}}
     }
     const conversationId = client.global.get("conversationId");
     if (!conversationId) {
-        throw new Error("conversationId is empty — run '6. Create conversation' first");
+        throw new Error("conversationId is empty — run '6b. Resolve conversationId' first");
     }
     request.variables.set("strangerToken", token);
     request.variables.set("conversationId", conversationId);
@@ -1214,12 +1317,79 @@ Authorization: Bearer {{buyerToken}}
     }
     const conversationId = client.global.get("conversationId");
     if (!conversationId) {
-        throw new Error("conversationId is empty — run '6. Create conversation' first");
+        throw new Error("conversationId is empty — run '6b. Resolve conversationId' first");
     }
     request.variables.set("buyerToken", token);
     request.variables.set("conversationId", conversationId);
 %}
 POST {{host}}/api/v1/conversations/{{conversationId}}/read
+Authorization: Bearer {{buyerToken}}
+Content-Type: application/json
+
+{
+  "upToMessageId": "{{unknownMessageId}}"
+}
+
+> {%
+    client.test("status 404", function() {
+        client.assert(response.status === 404, "Expected 404 when upToMessageId is not in this conversation");
+    });
+%}
+
+### 43. Mark as read via offer as seller (expect 404)
+< {%
+    const token = client.global.get("sellerToken");
+    if (!token) {
+        throw new Error("sellerToken is empty — run '2. Login seller' first");
+    }
+    request.variables.set("sellerToken", token);
+%}
+POST {{host}}/api/v1/offers/{{offerId}}/messages/read
+Authorization: Bearer {{sellerToken}}
+
+> {%
+    client.test("status 404", function() {
+        client.assert(response.status === 404, "Expected 404: offer-scoped read looks up the buyer conversation");
+    });
+%}
+
+### 44. List offer messages after and before together (expect 400)
+< {%
+    const token = client.global.get("buyerToken");
+    if (!token) {
+        throw new Error("buyerToken is empty — run '1. Login buyer' first");
+    }
+    const cursor = client.global.get("lastMessageId") || client.global.get("firstMessageId");
+    if (!cursor) {
+        throw new Error("cursor missing — run list messages first");
+    }
+    request.variables.set("buyerToken", token);
+    request.variables.set("cursor", cursor);
+%}
+GET {{host}}/api/v1/offers/{{offerId}}/messages?after={{cursor}}&before={{cursor}}
+Authorization: Bearer {{buyerToken}}
+
+> {%
+    client.test("status 400", function() {
+        client.assert(response.status === 400, "Expected 400 when after and before are both set");
+    });
+    client.test("message mentions after and before", function() {
+        const message = response.body && response.body.message;
+        if (message) {
+            client.assert(String(message).indexOf("after") !== -1, "Expected error about after/before");
+        }
+    });
+%}
+
+### 45. Mark as read via offer unknown message id (expect 404)
+< {%
+    const token = client.global.get("buyerToken");
+    if (!token) {
+        throw new Error("buyerToken is empty — run '1. Login buyer' first");
+    }
+    request.variables.set("buyerToken", token);
+%}
+POST {{host}}/api/v1/offers/{{offerId}}/messages/read
 Authorization: Bearer {{buyerToken}}
 Content-Type: application/json
 

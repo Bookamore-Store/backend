@@ -6,7 +6,6 @@ import com.bookamore.backend.dto.chat.ChatMessageListResponse;
 import com.bookamore.backend.dto.chat.ChatMessageRequest;
 import com.bookamore.backend.dto.chat.ChatMessageResponse;
 import com.bookamore.backend.dto.chat.ChatReadResponse;
-import com.bookamore.backend.dto.chat.ChatStartRequest;
 import com.bookamore.backend.dto.chat.ChatUnreadCountResponse;
 import com.bookamore.backend.entity.ChatConversation;
 import com.bookamore.backend.entity.ChatMessage;
@@ -36,7 +35,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -65,23 +63,35 @@ public class ChatServiceImpl implements ChatService {
     private final Validator validator;
 
     @Override
-    public ChatInboxItemResponse getOrCreateForOffer(UUID offerId, ChatStartRequest request) {
+    @Transactional(readOnly = true)
+    public ChatMessageListResponse listMessagesForOffer(UUID offerId, ChatMessageListQuery query) {
+        validateDto(query);
         UUID userId = SecurityUtils.requireAuthenticatedUserId();
+        requireOfferForBuyer(offerId, userId);
+
+        return conversationRepository.findByOfferIdAndBuyerId(offerId, userId)
+                .map(conversation -> loadMessages(conversation.getId(), query))
+                .orElseGet(() -> new ChatMessageListResponse(List.of()));
+    }
+
+    @Override
+    public ChatMessageResponse sendMessageForOffer(UUID offerId, ChatMessageRequest request) {
         validateDto(request);
+        UUID conversationId = getOrCreateConversationIdForOffer(offerId);
+        UUID userId = SecurityUtils.requireAuthenticatedUserId();
+        ChatMessage message = new TransactionTemplate(transactionManager).execute(status ->
+                persistParticipantMessage(conversationId, userId, request.getContent())
+        );
+        return chatMapper.toMessage(message);
+    }
 
-        Offer offer = offerRepository.findById(offerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Offer not found with id: " + offerId));
-
-        if (offer.getUser().getId().equals(userId)) {
-            throw new UnprocessableRequestException("Seller cannot start a conversation with themselves");
-        }
-
-        String initialMessage = request.getInitialMessage();
+    private UUID getOrCreateConversationIdForOffer(UUID offerId) {
+        UUID userId = SecurityUtils.requireAuthenticatedUserId();
+        Offer offer = requireOfferForBuyer(offerId, userId);
 
         Optional<ChatConversation> existing = conversationRepository.findByOfferIdAndBuyerId(offerId, userId);
         if (existing.isPresent()) {
-            appendInitialMessageIfPresent(existing.get().getId(), userId, initialMessage);
-            return chatMapper.toInboxItem(existing.get(), userId);
+            return existing.get().getId();
         }
 
         if (offer.getStatus() != OfferStatus.OPEN) {
@@ -93,22 +103,15 @@ public class ChatServiceImpl implements ChatService {
 
         try {
             new TransactionTemplate(transactionManager).executeWithoutResult(status ->
-                    persistNewConversation(offer, buyer, initialMessage)
+                    persistNewConversation(offer, buyer)
             );
         } catch (DataIntegrityViolationException ex) {
             log.debug("Conversation already exists for offer {} and buyer {}", offerId, userId);
-            conversationRepository.findByOfferIdAndBuyerId(offerId, userId)
-                    .ifPresent(conversation ->
-                            appendInitialMessageIfPresent(conversation.getId(), userId, initialMessage));
         }
-        return getInboxItemForOffer(offerId, userId);
-    }
-
-    private ChatInboxItemResponse getInboxItemForOffer(UUID offerId, UUID userId) {
         return conversationRepository.findByOfferIdAndBuyerId(offerId, userId)
-            .map(conversation -> chatMapper.toInboxItem(conversation, userId))
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Conversation not found for offer " + offerId + " and buyer " + userId));
+                .map(ChatConversation::getId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Conversation not found for offer " + offerId + " and buyer " + userId));
     }
 
     @Override
@@ -138,33 +141,32 @@ public class ChatServiceImpl implements ChatService {
     @Override
     @Transactional(readOnly = true)
     public ChatMessageListResponse listMessages(UUID conversationId, ChatMessageListQuery query) {
-        UUID userId = SecurityUtils.requireAuthenticatedUserId();
         validateDto(query);
+        return loadMessages(conversationId, query);
+    }
 
-        UUID after = query.getAfter();
-        UUID before = query.getBefore();
-        Integer limit = query.getLimit();
-
+    private ChatMessageListResponse loadMessages(UUID conversationId, ChatMessageListQuery query) {
+        UUID userId = SecurityUtils.requireAuthenticatedUserId();
         conversationRepository.findByIdAndParticipant(conversationId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
 
-        int cappedLimit = capLimit(limit, DEFAULT_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT);
+        int cappedLimit = capLimit(query.getLimit(), DEFAULT_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT);
         Pageable pageable = PageRequest.of(0, cappedLimit);
         List<ChatMessage> messages;
 
-        if (after != null) {
+        if (query.getAfter() != null) {
             messages = messageRepository.findByConversationIdAndIdGreaterThanOrderByIdAsc(
-                    conversationId, after, pageable);
-        } else if (before != null) {
+                    conversationId, query.getAfter(), pageable);
+        } else if (query.getBefore() != null) {
             messages = messageRepository.findByConversationIdAndIdLessThanOrderByIdDesc(
-                    conversationId, before, pageable);
+                    conversationId, query.getBefore(), pageable);
             Collections.reverse(messages);
         } else {
             messages = messageRepository.findByConversationIdOrderByIdDesc(conversationId, pageable);
             Collections.reverse(messages);
         }
 
-        return new ChatMessageListResponse(conversationId, chatMapper.toMessages(messages));
+        return new ChatMessageListResponse(chatMapper.toMessages(messages));
     }
 
     @Override
@@ -186,7 +188,29 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     @Transactional
+    public ChatReadResponse markAsReadForOffer(UUID offerId, UUID upToMessageId) {
+        UUID conversationId = requireExistingConversationIdForOffer(offerId);
+        return applyReadWatermark(conversationId, upToMessageId);
+    }
+
+    @Override
+    @Transactional
     public ChatReadResponse markAsRead(UUID conversationId, UUID upToMessageId) {
+        return applyReadWatermark(conversationId, upToMessageId);
+    }
+
+    private UUID requireExistingConversationIdForOffer(UUID offerId) {
+        UUID userId = SecurityUtils.requireAuthenticatedUserId();
+        if (!offerRepository.existsById(offerId)) {
+            throw new ResourceNotFoundException("Offer not found with id: " + offerId);
+        }
+        return conversationRepository.findByOfferIdAndBuyerId(offerId, userId)
+                .map(ChatConversation::getId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Conversation not found for offer " + offerId + " and buyer " + userId));
+    }
+
+    private ChatReadResponse applyReadWatermark(UUID conversationId, UUID upToMessageId) {
         UUID userId = SecurityUtils.requireAuthenticatedUserId();
         ChatConversation conversation = conversationRepository.findByIdAndParticipantForUpdate(conversationId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
@@ -211,16 +235,16 @@ public class ChatServiceImpl implements ChatService {
             conversation.setSellerUnreadCount(remaining);
         }
         conversationRepository.saveAndFlush(conversation);
-        return new ChatReadResponse(conversationId, remaining);
+        return new ChatReadResponse(remaining);
     }
 
-    private void appendInitialMessageIfPresent(UUID conversationId, UUID senderId, String initialMessage) {
-        if (!StringUtils.hasText(initialMessage)) {
-            return;
+    private Offer requireOfferForBuyer(UUID offerId, UUID userId) {
+        Offer offer = offerRepository.findById(offerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Offer not found with id: " + offerId));
+        if (offer.getUser().getId().equals(userId)) {
+            throw new UnprocessableRequestException("Seller cannot start a conversation with themselves");
         }
-        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
-                persistParticipantMessage(conversationId, senderId, initialMessage)
-        );
+        return offer;
     }
 
     private ChatMessage persistParticipantMessage(UUID conversationId, UUID senderId, String content) {
@@ -234,18 +258,12 @@ public class ChatServiceImpl implements ChatService {
         return message;
     }
 
-    private void persistNewConversation(Offer offer, User buyer, String initialMessage) {
+    private void persistNewConversation(Offer offer, User buyer) {
         ChatConversation conversation = new ChatConversation();
         conversation.setOffer(offer);
         conversation.setSeller(offer.getUser());
         conversation.setBuyer(buyer);
-        conversation = conversationRepository.saveAndFlush(conversation);
-
-        if (StringUtils.hasText(initialMessage)) {
-            persistMessage(conversation, buyer, initialMessage);
-            incrementCounterpartUnread(conversation, buyer.getId());
-            conversationRepository.saveAndFlush(conversation);
-        }
+        conversationRepository.saveAndFlush(conversation);
     }
 
     private ChatMessage persistMessage(ChatConversation conversation, User sender, String content) {

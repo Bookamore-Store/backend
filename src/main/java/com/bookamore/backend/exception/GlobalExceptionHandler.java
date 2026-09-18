@@ -106,7 +106,7 @@ public class GlobalExceptionHandler {
                     schema = @Schema(implementation = ErrorResponse.class),
                     examples = @ExampleObject(
                             name = "Unprocessable Request Example",
-                            value = "{\"timestamp\": \"2025-08-13T10:00:00.000Z\", \"status\": 422, \"error\": \"Unprocessable Entity\", \"message\": \"Seller cannot start a conversation with themselves\", \"path\": \"/api/v1/offers/{offerId}/conversations\"}"
+                            value = "{\"timestamp\": \"2025-08-13T10:00:00.000Z\", \"status\": 422, \"error\": \"Unprocessable Entity\", \"message\": \"Seller cannot start a conversation with themselves\", \"path\": \"/api/v1/offers/{offerId}/messages\"}"
                     )
             )
     )

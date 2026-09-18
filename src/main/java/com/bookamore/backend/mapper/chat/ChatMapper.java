@@ -33,7 +33,6 @@ public interface ChatMapper {
     ChatInboxItemResponse toInboxItemBase(ChatConversation conversation);
 
     @Mapping(target = "senderId", source = "sender.id")
-    @Mapping(target = "conversationId", source = "conversation.id")
     ChatMessageResponse toMessage(ChatMessage message);
 
     List<ChatMessageResponse> toMessages(List<ChatMessage> messages);

@@ -86,7 +86,8 @@ public class ChatController {
     }
 
     @Operation(summary = "Get conversation messages",
-            description = "Returns messages in chronological order. `after` and `before` cannot be used together. Requires JWT.")
+            description = "Returns messages in chronological order. Same as GET /api/v1/offers/{offerId}/messages, "
+                    + "except the conversation is taken from the path. `after` and `before` cannot be used together. Requires JWT.")
     @ApiResponses(value = {
             @ApiResponse(
                     responseCode = "200",
@@ -106,7 +107,8 @@ public class ChatController {
     }
 
     @Operation(summary = "Send message",
-            description = "Sends a text message in the conversation. Requires JWT.")
+            description = "Sends a text message in the conversation. Same as POST /api/v1/offers/{offerId}/messages, "
+                    + "except the conversation is taken from the path. Requires JWT.")
     @ApiResponses(value = {
             @ApiResponse(
                     responseCode = "200",
