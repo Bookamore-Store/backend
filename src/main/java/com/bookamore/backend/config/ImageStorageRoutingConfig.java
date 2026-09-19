@@ -13,8 +13,8 @@ import org.springframework.context.annotation.Primary;
 @Configuration
 public class ImageStorageRoutingConfig {
 
-    static final String LOCAL_BEAN = "localImageStorageRepository";
-    static final String S3_BEAN = "s3ImageStorageRepository";
+    public static final String LOCAL_BEAN = "localImageStorageRepository";
+    public static final String S3_BEAN = "s3ImageStorageRepository";
 
     @Bean
     public ImageStorageRegistry imageStorageRegistry(

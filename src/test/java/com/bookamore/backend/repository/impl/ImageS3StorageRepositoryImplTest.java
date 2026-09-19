@@ -7,9 +7,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.http.AbortableInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
@@ -73,6 +77,31 @@ class ImageS3StorageRepositoryImplTest {
                 .thenReturn(HeadObjectResponse.builder().build());
 
         assertThat(storage.isExists("cover.jpg", "book")).isTrue();
+    }
+
+    @Test
+    void getImage_returnsBytesWhenObjectExists() throws IOException {
+        byte[] bytes = {1, 2, 3};
+        when(s3Client.getObject(any(GetObjectRequest.class)))
+                .thenReturn(new ResponseInputStream<>(
+                        GetObjectResponse.builder().build(),
+                        AbortableInputStream.create(new ByteArrayInputStream(bytes))
+                ));
+
+        assertThat(storage.getImage("cover.jpg", "book")).contains(bytes);
+
+        ArgumentCaptor<GetObjectRequest> captor = ArgumentCaptor.forClass(GetObjectRequest.class);
+        verify(s3Client).getObject(captor.capture());
+        assertThat(captor.getValue().bucket()).isEqualTo(BUCKET);
+        assertThat(captor.getValue().key()).isEqualTo("img/book/cover.jpg");
+    }
+
+    @Test
+    void getImage_returnsEmptyWhenObjectMissing() throws IOException {
+        when(s3Client.getObject(any(GetObjectRequest.class)))
+                .thenThrow(NoSuchKeyException.builder().statusCode(404).build());
+
+        assertThat(storage.getImage("missing.jpg", "book")).isEmpty();
     }
 
     @Test

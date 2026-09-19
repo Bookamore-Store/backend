@@ -8,12 +8,14 @@ import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
 import java.io.IOException;
+import java.util.Optional;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -77,6 +79,28 @@ public class ImageS3StorageRepositoryImpl implements ImageStorageRepository {
         } catch (SdkException e) {
             log.error("Failed to delete file from S3: s3://{}/{}", bucket, objectKey, e);
             throw new IOException("Failed to delete image from S3: " + objectKey, e);
+        }
+    }
+
+    @Override
+    public Optional<byte[]> getImage(String fileName, String subDir) throws IOException {
+        String objectKey = objectKey(subDir, fileName);
+        try (var response = s3Client.getObject(GetObjectRequest.builder()
+            .bucket(bucket)
+            .key(objectKey)
+            .build())) {
+            return Optional.of(response.readAllBytes());
+        } catch (NoSuchKeyException e) {
+            return Optional.empty();
+        } catch (S3Exception e) {
+            if (e.statusCode() == 404) {
+                return Optional.empty();
+            }
+            log.error("Failed to read file from S3: s3://{}/{}", bucket, objectKey, e);
+            throw new IOException("Failed to read image from S3: " + objectKey, e);
+        } catch (SdkException e) {
+            log.error("Failed to read file from S3: s3://{}/{}", bucket, objectKey, e);
+            throw new IOException("Failed to read image from S3: " + objectKey, e);
         }
     }
 
