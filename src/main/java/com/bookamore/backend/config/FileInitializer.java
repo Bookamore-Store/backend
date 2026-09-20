@@ -6,6 +6,7 @@ import com.bookamore.backend.repository.impl.ImageLocalStorageRepositoryImpl;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -22,6 +23,7 @@ import java.util.Set;
 
 @Slf4j
 @Configuration
+@ConditionalOnProperty(prefix = "file.storage", name = "local-enabled", havingValue = "true")
 @RequiredArgsConstructor
 public class FileInitializer {
 
@@ -36,8 +38,9 @@ public class FileInitializer {
         createSubDirsIfNotExists();
     }
 
-    @Bean
-    public ImageStorageRepository imageStorageRepository() {
+    @Bean(ImageStorageRoutingConfig.LOCAL_BEAN)
+    public ImageStorageRepository localImageStorageRepository() {
+        log.info("Local image storage available: {}", uploadDir);
         return new ImageLocalStorageRepositoryImpl(uploadDir);
     }
 

@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -55,5 +56,14 @@ public class ImageLocalStorageRepositoryImpl implements ImageStorageRepository {
             log.error("Failed to delete file: '{}' due to I/O error.", targetLocation.toAbsolutePath(), e);
             throw e;
         }
+    }
+
+    @Override
+    public Optional<byte[]> getImage(String fileName, String subDir) throws IOException {
+        Path location = uploadDir.resolve(subDir).normalize().resolve(fileName).normalize();
+        if (!Files.isRegularFile(location)) {
+            return Optional.empty();
+        }
+        return Optional.of(Files.readAllBytes(location));
     }
 }
