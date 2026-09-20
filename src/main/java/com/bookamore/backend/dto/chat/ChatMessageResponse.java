@@ -16,9 +16,6 @@ public class ChatMessageResponse {
     @Schema(example = "d367ec63-a73b-485d-a1c8-6b793b009e53", description = "Message id")
     private UUID id;
 
-    @Schema(example = "d367ec63-a73b-485d-a1c8-6b793b009e53", description = "Conversation id")
-    private UUID conversationId;
-
     @Schema(example = "d367ec63-a73b-485d-a1c8-6b793b009e53", description = "Sender user id")
     private UUID senderId;
 
