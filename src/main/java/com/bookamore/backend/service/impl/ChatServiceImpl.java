@@ -1,0 +1,318 @@
+package com.bookamore.backend.service.impl;
+
+import com.bookamore.backend.dto.chat.ChatInboxItemResponse;
+import com.bookamore.backend.dto.chat.ChatMessageListQuery;
+import com.bookamore.backend.dto.chat.ChatMessageListResponse;
+import com.bookamore.backend.dto.chat.ChatMessageRequest;
+import com.bookamore.backend.dto.chat.ChatMessageResponse;
+import com.bookamore.backend.dto.chat.ChatReadResponse;
+import com.bookamore.backend.dto.chat.ChatUnreadCountResponse;
+import com.bookamore.backend.entity.ChatConversation;
+import com.bookamore.backend.entity.ChatMessage;
+import com.bookamore.backend.entity.Offer;
+import com.bookamore.backend.entity.User;
+import com.bookamore.backend.dto.chat.ChatParticipantRole;
+import com.bookamore.backend.entity.enums.OfferStatus;
+import com.bookamore.backend.exception.ResourceNotFoundException;
+import com.bookamore.backend.exception.UnprocessableRequestException;
+import com.bookamore.backend.mapper.chat.ChatMapper;
+import com.bookamore.backend.repository.ChatConversationRepository;
+import com.bookamore.backend.repository.ChatMessageRepository;
+import com.bookamore.backend.repository.OfferRepository;
+import com.bookamore.backend.repository.UserRepository;
+import com.bookamore.backend.service.ChatService;
+import com.bookamore.backend.util.SecurityUtils;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Validator;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ChatServiceImpl implements ChatService {
+
+    private static final int DEFAULT_INBOX_SIZE = 20;
+    private static final int MAX_INBOX_SIZE = 50;
+    private static final int DEFAULT_MESSAGE_LIMIT = 20;
+    private static final int MAX_MESSAGE_LIMIT = 100;
+    private static final int PREVIEW_MAX_LENGTH = 80;
+
+    private final ChatConversationRepository conversationRepository;
+    private final ChatMessageRepository messageRepository;
+    private final OfferRepository offerRepository;
+    private final UserRepository userRepository;
+    private final ChatMapper chatMapper;
+    private final PlatformTransactionManager transactionManager;
+    private final Validator validator;
+
+    @Override
+    @Transactional(readOnly = true)
+    public ChatMessageListResponse listMessagesForOffer(UUID offerId, ChatMessageListQuery query) {
+        validateDto(query);
+        UUID userId = SecurityUtils.requireAuthenticatedUserId();
+        requireOfferForBuyer(offerId, userId);
+
+        return conversationRepository.findByOfferIdAndBuyerId(offerId, userId)
+                .map(conversation -> loadMessages(conversation.getId(), query))
+                .orElseGet(() -> new ChatMessageListResponse(List.of()));
+    }
+
+    @Override
+    public ChatMessageResponse sendMessageForOffer(UUID offerId, ChatMessageRequest request) {
+        validateDto(request);
+        UUID conversationId = getOrCreateConversationIdForOffer(offerId);
+        UUID userId = SecurityUtils.requireAuthenticatedUserId();
+        ChatMessage message = new TransactionTemplate(transactionManager).execute(status ->
+                persistParticipantMessage(conversationId, userId, request.getContent())
+        );
+        return chatMapper.toMessage(message);
+    }
+
+    private UUID getOrCreateConversationIdForOffer(UUID offerId) {
+        UUID userId = SecurityUtils.requireAuthenticatedUserId();
+        Offer offer = requireOfferForBuyer(offerId, userId);
+
+        Optional<ChatConversation> existing = conversationRepository.findByOfferIdAndBuyerId(offerId, userId);
+        if (existing.isPresent()) {
+            return existing.get().getId();
+        }
+
+        if (offer.getStatus() != OfferStatus.OPEN) {
+            throw new UnprocessableRequestException("Cannot start a conversation on a non-OPEN offer");
+        }
+
+        User buyer = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Not found User with uuid = " + userId));
+
+        try {
+            new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+                    persistNewConversation(offer, buyer)
+            );
+        } catch (DataIntegrityViolationException ex) {
+            log.debug("Conversation already exists for offer {} and buyer {}", offerId, userId);
+        }
+        return conversationRepository.findByOfferIdAndBuyerId(offerId, userId)
+                .map(ChatConversation::getId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Conversation not found for offer " + offerId + " and buyer " + userId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ChatInboxItemResponse> listInbox(Integer page, Integer size, ChatParticipantRole role) {
+        UUID userId = SecurityUtils.requireAuthenticatedUserId();
+        Pageable pageable = PageRequest.of(
+                normalizePage(page),
+                capLimit(size, DEFAULT_INBOX_SIZE, MAX_INBOX_SIZE)
+        );
+        return conversationRepository.findInboxByUserId(userId, includeBuyer(role), includeSeller(role), pageable)
+                .map(conversation -> chatMapper.toInboxItem(conversation, userId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ChatUnreadCountResponse getUnreadCount(ChatParticipantRole role) {
+        UUID userId = SecurityUtils.requireAuthenticatedUserId();
+        ChatConversationRepository.UnreadCountAggregate counts =
+                conversationRepository.aggregateUnreadByUserId(userId, includeBuyer(role), includeSeller(role));
+        return new ChatUnreadCountResponse(
+                (int) counts.getUnreadMessages(),
+                (int) counts.getUnreadConversations()
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ChatMessageListResponse listMessages(UUID conversationId, ChatMessageListQuery query) {
+        validateDto(query);
+        return loadMessages(conversationId, query);
+    }
+
+    private ChatMessageListResponse loadMessages(UUID conversationId, ChatMessageListQuery query) {
+        UUID userId = SecurityUtils.requireAuthenticatedUserId();
+        conversationRepository.findByIdAndParticipant(conversationId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
+
+        int cappedLimit = capLimit(query.getLimit(), DEFAULT_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT);
+        Pageable pageable = PageRequest.of(0, cappedLimit);
+        List<ChatMessage> messages;
+
+        if (query.getAfter() != null) {
+            messages = messageRepository.findByConversationIdAndIdGreaterThanOrderByIdAsc(
+                    conversationId, query.getAfter(), pageable);
+        } else if (query.getBefore() != null) {
+            messages = messageRepository.findByConversationIdAndIdLessThanOrderByIdDesc(
+                    conversationId, query.getBefore(), pageable);
+            Collections.reverse(messages);
+        } else {
+            messages = messageRepository.findByConversationIdOrderByIdDesc(conversationId, pageable);
+            Collections.reverse(messages);
+        }
+
+        return new ChatMessageListResponse(chatMapper.toMessages(messages));
+    }
+
+    @Override
+    @Transactional
+    public ChatMessageResponse sendMessage(UUID conversationId, ChatMessageRequest request) {
+        validateDto(request);
+
+        UUID userId = SecurityUtils.requireAuthenticatedUserId();
+        ChatMessage message = persistParticipantMessage(conversationId, userId, request.getContent());
+        return chatMapper.toMessage(message);
+    }
+
+    private void validateDto(Object dto) {
+        Set<ConstraintViolation<Object>> violations = validator.validate(dto);
+        if (!violations.isEmpty()) {
+            throw new ConstraintViolationException(violations);
+        }
+    }
+
+    @Override
+    @Transactional
+    public ChatReadResponse markAsReadForOffer(UUID offerId, UUID upToMessageId) {
+        UUID conversationId = requireExistingConversationIdForOffer(offerId);
+        return applyReadWatermark(conversationId, upToMessageId);
+    }
+
+    @Override
+    @Transactional
+    public ChatReadResponse markAsRead(UUID conversationId, UUID upToMessageId) {
+        return applyReadWatermark(conversationId, upToMessageId);
+    }
+
+    private UUID requireExistingConversationIdForOffer(UUID offerId) {
+        UUID userId = SecurityUtils.requireAuthenticatedUserId();
+        if (!offerRepository.existsById(offerId)) {
+            throw new ResourceNotFoundException("Offer not found with id: " + offerId);
+        }
+        return conversationRepository.findByOfferIdAndBuyerId(offerId, userId)
+                .map(ChatConversation::getId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Conversation not found for offer " + offerId + " and buyer " + userId));
+    }
+
+    private ChatReadResponse applyReadWatermark(UUID conversationId, UUID upToMessageId) {
+        UUID userId = SecurityUtils.requireAuthenticatedUserId();
+        ChatConversation conversation = conversationRepository.findByIdAndParticipantForUpdate(conversationId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
+
+        UUID watermark;
+        if (upToMessageId != null) {
+            messageRepository.findByIdAndConversationId(upToMessageId, conversationId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Message not found with id: " + upToMessageId));
+            watermark = upToMessageId;
+        } else {
+            watermark = messageRepository.findMaxIdByConversationId(conversationId);
+        }
+
+        if (watermark != null) {
+            messageRepository.markCounterpartMessagesReadUpTo(conversationId, userId, watermark);
+        }
+
+        int remaining = (int) messageRepository.countUnreadFromCounterpart(conversationId, userId);
+        if (conversation.getBuyer().getId().equals(userId)) {
+            conversation.setBuyerUnreadCount(remaining);
+        } else {
+            conversation.setSellerUnreadCount(remaining);
+        }
+        conversationRepository.saveAndFlush(conversation);
+        return new ChatReadResponse(remaining);
+    }
+
+    private Offer requireOfferForBuyer(UUID offerId, UUID userId) {
+        Offer offer = offerRepository.findById(offerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Offer not found with id: " + offerId));
+        if (offer.getUser().getId().equals(userId)) {
+            throw new UnprocessableRequestException("Seller cannot start a conversation with themselves");
+        }
+        return offer;
+    }
+
+    private ChatMessage persistParticipantMessage(UUID conversationId, UUID senderId, String content) {
+        ChatConversation conversation = conversationRepository.findByIdAndParticipantForUpdate(conversationId, senderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
+        User sender = userRepository.findById(senderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Not found User with uuid = " + senderId));
+        ChatMessage message = persistMessage(conversation, sender, content);
+        incrementCounterpartUnread(conversation, senderId);
+        conversationRepository.save(conversation);
+        return message;
+    }
+
+    private void persistNewConversation(Offer offer, User buyer) {
+        ChatConversation conversation = new ChatConversation();
+        conversation.setOffer(offer);
+        conversation.setSeller(offer.getUser());
+        conversation.setBuyer(buyer);
+        conversationRepository.saveAndFlush(conversation);
+    }
+
+    private ChatMessage persistMessage(ChatConversation conversation, User sender, String content) {
+        ChatMessage message = new ChatMessage();
+        message.setConversation(conversation);
+        message.setSender(sender);
+        message.setContent(content);
+        message = messageRepository.saveAndFlush(message);
+
+        LocalDateTime sentAt = message.getCreatedDate() != null ? message.getCreatedDate() : LocalDateTime.now();
+        conversation.setLastMessageAt(sentAt);
+        conversation.setLastMessagePreview(truncatePreview(content));
+        return message;
+    }
+
+    private void incrementCounterpartUnread(ChatConversation conversation, UUID senderId) {
+        if (conversation.getBuyer().getId().equals(senderId)) {
+            conversation.setSellerUnreadCount(conversation.getSellerUnreadCount() + 1);
+        } else {
+            conversation.setBuyerUnreadCount(conversation.getBuyerUnreadCount() + 1);
+        }
+    }
+
+    private String truncatePreview(String content) {
+        if (content.length() <= PREVIEW_MAX_LENGTH) {
+            return content;
+        }
+        return content.substring(0, PREVIEW_MAX_LENGTH);
+    }
+
+    private boolean includeBuyer(ChatParticipantRole role) {
+        return role == null || role == ChatParticipantRole.BUYER;
+    }
+
+    private boolean includeSeller(ChatParticipantRole role) {
+        return role == null || role == ChatParticipantRole.SELLER;
+    }
+
+    private int normalizePage(Integer page) {
+        if (page == null || page < 0) {
+            return 0;
+        }
+        return page;
+    }
+
+    private int capLimit(Integer value, int defaultValue, int maxValue) {
+        if (value == null || value < 1) {
+            return defaultValue;
+        }
+        return Math.min(value, maxValue);
+    }
+}

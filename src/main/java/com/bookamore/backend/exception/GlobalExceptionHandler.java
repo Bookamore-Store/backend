@@ -6,8 +6,12 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.validation.FieldError;
+import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -16,6 +20,11 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Slf4j
 @RestControllerAdvice
@@ -38,7 +47,7 @@ public class GlobalExceptionHandler {
     }
 
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
-    @ExceptionHandler(HttpClientErrorException.Unauthorized.class)
+    @ExceptionHandler({HttpClientErrorException.Unauthorized.class, UnauthorizedAccessException.class})
     @ApiResponse(
             responseCode = "401",
             description = "Unauthorized Access",
@@ -50,7 +59,7 @@ public class GlobalExceptionHandler {
                     )
             )
     )
-    public ErrorResponse handleUnauthorizedException(HttpClientErrorException.Unauthorized ex, HttpServletRequest request) {
+    public ErrorResponse handleUnauthorizedException(RuntimeException ex, HttpServletRequest request) {
         return ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.UNAUTHORIZED.value())
@@ -88,6 +97,76 @@ public class GlobalExceptionHandler {
         return errorResponse;
     }
 
+    @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
+    @ExceptionHandler(UnprocessableRequestException.class)
+    @ApiResponse(
+            responseCode = "422",
+            description = "Unprocessable Entity: The request is well-formed but cannot be processed",
+            content = @Content(
+                    schema = @Schema(implementation = ErrorResponse.class),
+                    examples = @ExampleObject(
+                            name = "Unprocessable Request Example",
+                            value = "{\"timestamp\": \"2025-08-13T10:00:00.000Z\", \"status\": 422, \"error\": \"Unprocessable Entity\", \"message\": \"Seller cannot start a conversation with themselves\", \"path\": \"/api/v1/offers/{offerId}/messages\"}"
+                    )
+            )
+    )
+    public ErrorResponse handleUnprocessableRequestException(UnprocessableRequestException ex, HttpServletRequest request) {
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.UNPROCESSABLE_ENTITY.value())
+                .error(HttpStatus.UNPROCESSABLE_ENTITY.getReasonPhrase())
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .build();
+
+        log.warn("UnprocessableRequestException: {}", errorResponse);
+
+        return errorResponse;
+    }
+
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(ConstraintViolationException.class)
+    @ApiResponse(
+        responseCode = "400",
+        description = "Bad Request: Invalid request payload or parameter",
+        content = @Content(
+            schema = @Schema(implementation = ErrorResponse.class),
+            examples = @ExampleObject(
+                name = "Validation Error Example",
+                value = "{\"timestamp\": \"2025-08-13T10:00:00.000Z\", \"status\": 400, \"error\": \"Bad Request\", \"message\": \"email cannot be null\", \"path\": \"/api/v1/signup\"}"
+            )
+        )
+    )
+    public ErrorResponse handleConstraintViolations(ConstraintViolationException ex, HttpServletRequest request) {
+        List<ConstraintViolation<?>> violations = ex.getConstraintViolations().stream()
+            .sorted(Comparator.comparing(v -> v.getPropertyPath().toString()))
+            .toList();
+        String message = violations.isEmpty()
+            ? "Validation failed"
+            : violations.stream()
+            .map(ConstraintViolation::getMessage)
+            .collect(Collectors.joining("; "));
+
+        violations.forEach(v -> log.warn(
+            "Validation failed for field '{}' with value '{}': {}",
+            v.getPropertyPath(),
+            v.getInvalidValue(),
+            v.getMessage()
+        ));
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+            .timestamp(LocalDateTime.now())
+            .status(HttpStatus.BAD_REQUEST.value())
+            .error(HttpStatus.BAD_REQUEST.getReasonPhrase())
+            .message(message)
+            .path(request.getRequestURI())
+            .build();
+
+        log.warn("Validation failed: {}", errorResponse);
+
+        return errorResponse;
+    }
+
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ApiResponse(
@@ -102,25 +181,35 @@ public class GlobalExceptionHandler {
             )
     )
     public ErrorResponse handleValidationExceptions(MethodArgumentNotValidException ex, HttpServletRequest request) {
-        String defaultErrorMessage = "Validation failed";
-        String firstErrorMessage = ex.getBindingResult().getFieldError() != null ?
-                ex.getBindingResult().getFieldError().getDefaultMessage() :
-                defaultErrorMessage;
+        List<ObjectError> errors = Stream.concat(
+                ex.getBindingResult().getFieldErrors().stream()
+                        .sorted(Comparator.comparing(FieldError::getField)),
+                ex.getBindingResult().getGlobalErrors().stream()
+        ).toList();
 
-        String fieldName = "unknown";
-        Object rejectedValue = null;
-        if (ex.getBindingResult().getFieldError() != null) {
-            fieldName = ex.getBindingResult().getFieldError().getField();
-            rejectedValue = ex.getBindingResult().getFieldError().getRejectedValue();
-        }
+        String message = errors.isEmpty()
+                ? "Validation failed"
+                : errors.stream()
+                .map(ObjectError::getDefaultMessage)
+                .filter(Objects::nonNull)
+                .collect(Collectors.joining("; "));
 
-        log.warn("Validation failed for field '{}' with value '{}': {}", fieldName, rejectedValue, firstErrorMessage);
+        errors.forEach(error -> {
+            if (error instanceof FieldError fieldError) {
+                log.warn("Validation failed for field '{}' with value '{}': {}",
+                        fieldError.getField(),
+                        fieldError.getRejectedValue(),
+                        fieldError.getDefaultMessage());
+            } else {
+                log.warn("Validation failed: {}", error.getDefaultMessage());
+            }
+        });
 
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.BAD_REQUEST.value())
                 .error(HttpStatus.BAD_REQUEST.getReasonPhrase())
-                .message(firstErrorMessage)
+                .message(message)
                 .path(request.getRequestURI())
                 .build();
 

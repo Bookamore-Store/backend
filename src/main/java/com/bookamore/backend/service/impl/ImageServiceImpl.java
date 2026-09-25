@@ -10,10 +10,8 @@ import com.bookamore.backend.repository.BookRepository;
 import com.bookamore.backend.repository.ImageRepository;
 import com.bookamore.backend.repository.ImageStorageRepository;
 import com.bookamore.backend.repository.OfferRepository;
-import com.bookamore.backend.service.BookService;
 import com.bookamore.backend.service.ImageService;
 import jakarta.annotation.PostConstruct;
-import jakarta.servlet.ServletContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,12 +36,10 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class ImageServiceImpl implements ImageService {
     private final ImageRepository imageRepository;
-    private final ImageStorageRepository imageLocalStorageRepository;
+    private final ImageStorageRepository imageStorageRepository;
     private final ImageMapper imageMapper;
     private final BookRepository bookRepository;
     private final OfferRepository offerRepository;
-    private final ServletContext servletContext;
-    private final BookService bookService;
 
     @Value("${file.hash-algorithm}")
     private String hash_algorithm;
@@ -258,7 +254,7 @@ public class ImageServiceImpl implements ImageService {
         String hashFileName = generateHashFileName(originalFileName, subDir);
 
         try {
-            imageLocalStorageRepository.saveImage(file, hashFileName, subDir);
+            imageStorageRepository.saveImage(file, hashFileName, subDir);
         } catch (IOException e) {
             log.error("Failed to save image: {}", e.toString());
             throw new RuntimeException("Failed to save image!");
@@ -276,7 +272,7 @@ public class ImageServiceImpl implements ImageService {
         while (!isUnique) {
             hashFileName = getHashFileName(originalFileName);
             count++;
-            if (!imageLocalStorageRepository.isExists(hashFileName, subDir)) {
+            if (!imageStorageRepository.isExists(hashFileName, subDir)) {
                 isUnique = true;
             } else if (count > 100) {
                 throw new RuntimeException(
@@ -340,7 +336,7 @@ public class ImageServiceImpl implements ImageService {
                 );
 
         try {
-            imageLocalStorageRepository.deleteImage(fileName, subdir);
+            imageStorageRepository.deleteImage(fileName, subdir);
         } catch (IOException e) {
             log.error("Failed to delete image: {}", e.toString());
             throw new RuntimeException("Failed to delete image!");

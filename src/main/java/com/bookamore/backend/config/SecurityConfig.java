@@ -46,7 +46,9 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/api/v1/auth/**", "/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/books/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/offers/{offerId}/messages").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/offers/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/images/transfer").permitAll()
                         .anyRequest().authenticated()
                 )
                 .oauth2Login(oauth2 -> oauth2

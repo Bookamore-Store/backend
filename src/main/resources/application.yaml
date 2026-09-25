@@ -23,6 +23,16 @@ file:
   hash-algorithm: SHA-256
   upload-dir: /app/uploads
   sub-dirs-perms: 775 # Octal POSIX permissions for upload subdirectories
+  storage:
+    write: ${ACTIVE_FILE_STORAGE:local}
+    local-enabled: ${FILE_STORAGE_LOCAL:true}
+    s3-enabled: ${FILE_STORAGE_S3:false}
+  s3:
+    endpoint: ${S3_ENDPOINT:}
+    region: ${S3_REGION:}
+    bucket: ${S3_BUCKET:}
+    access-key: ${S3_ACCESS_KEY:}
+    secret-key: ${S3_SECRET_KEY:}
 
 logging:
   level:

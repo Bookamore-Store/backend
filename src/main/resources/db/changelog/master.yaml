@@ -5,3 +5,5 @@ databaseChangeLog:
       file: db/changelog/changes/002_remove_test_field.sql
   - include:
       file: db/changelog/changes/003_create_favorites.sql
+  - include:
+      file: db/changelog/changes/004_create_chat.sql
