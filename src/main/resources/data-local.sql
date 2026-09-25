@@ -73,10 +73,10 @@ WHERE NOT EXISTS (
 -- шляхи робочі одразу після клону: nginx віддає /img/ з тієї ж теки, яку бекенд
 -- монтує як /app/uploads (див. frontend/README.md, розділ 4).
 -- Навмисно взяті нейтральні знімки, а не обкладинки з прод-даних.
-INSERT INTO books_images (created_date, book_id, id, path) VALUES
-    (NOW(), '018d4f1a-5b03-71d4-c001-000000000001', '018d4f1a-5b03-71d4-f001-000000000001', '/img/offer/bec7852589e981ff70dce1dc273be20186c466000c93c887291199224b52a65e.jpg'),
-    (NOW(), '018d4f1a-5b03-71d4-c001-000000000002', '018d4f1a-5b03-71d4-f001-000000000002', '/img/offer/c75fac464c67de08746dd00aabf6324c699094f7bf3e95a7702e62e6890f078e.jpeg'),
-    (NOW(), '018d4f1a-5b03-71d4-c001-000000000003', '018d4f1a-5b03-71d4-f001-000000000003', '/img/book/50463b0ce8ba467ff75a43197c2aac4220492096b3a5563776fce940d7f0f90f.png')
+INSERT INTO images (created_date, entity_id, entity_type, id, path) VALUES
+    (NOW(), '018d4f1a-5b03-71d4-c001-000000000001', 'BOOK', '018d4f1a-5b03-71d4-f001-000000000001', '/img/offer/bec7852589e981ff70dce1dc273be20186c466000c93c887291199224b52a65e.jpg'),
+    (NOW(), '018d4f1a-5b03-71d4-c001-000000000002', 'BOOK', '018d4f1a-5b03-71d4-f001-000000000002', '/img/offer/c75fac464c67de08746dd00aabf6324c699094f7bf3e95a7702e62e6890f078e.jpeg'),
+    (NOW(), '018d4f1a-5b03-71d4-c001-000000000003', 'BOOK', '018d4f1a-5b03-71d4-f001-000000000003', '/img/book/50463b0ce8ba467ff75a43197c2aac4220492096b3a5563776fce940d7f0f90f.png')
 ON CONFLICT (id) DO NOTHING;
 
 --################
