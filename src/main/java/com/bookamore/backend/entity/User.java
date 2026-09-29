@@ -4,6 +4,7 @@ import com.bookamore.backend.entity.base.BaseEntity;
 import jakarta.persistence.*;
 import lombok.Data;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,6 +27,9 @@ public class User extends BaseEntity {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<AuthProvider> authProviders = new ArrayList<>();
 
-//    @Column(name = "test_field")
-//    private String testField;
+    @Column(name = "password_reset_code")
+    private String passwordResetCode;
+
+    @Column(name = "password_reset_code_expiration_time")
+    private LocalDateTime passwordResetCodeExpirationTime;
 }
