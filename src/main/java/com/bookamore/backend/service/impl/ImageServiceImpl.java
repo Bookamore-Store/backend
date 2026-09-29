@@ -214,7 +214,7 @@ public class ImageServiceImpl implements ImageService {
                     entityType,
                     entityId
             );
-            throw new IllegalArgumentException(
+            throw new ResourceNotFoundException(
                     String.format("%s with ID %s does not exist", entityType, entityId)
             );
         }
