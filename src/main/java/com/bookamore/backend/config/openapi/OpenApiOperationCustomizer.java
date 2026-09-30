@@ -25,6 +25,8 @@ public class OpenApiOperationCustomizer implements OperationCustomizer {
         }
 
         handleRemoveCodeAnnotations(operation, handlerMethod);
+        removeUndeclaredStatus(operation, handlerMethod, HttpStatus.FORBIDDEN);
+        removeUndeclaredStatus(operation, handlerMethod, HttpStatus.CONFLICT);
         removeUndeclaredStatus(operation, handlerMethod, HttpStatus.UNPROCESSABLE_ENTITY);
 
         return operation;

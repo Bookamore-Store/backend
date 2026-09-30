@@ -141,7 +141,9 @@ public class OfferController {
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = OfferResponse.class)
                     )
-            )
+            ),
+            @ApiResponse(responseCode = "403", description = "Authenticated user is not the author"),
+            @ApiResponse(responseCode = "404", description = "Offer not found")
     })
     @PatchMapping("/{offerId}")
     public ResponseEntity<OfferResponse> updateOffer(@PathVariable UUID offerId,
@@ -152,7 +154,9 @@ public class OfferController {
 
     @Operation(summary = "Delete offer by ID", description = "Delete offer by id")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "204", description = "Book was deleted successfully")
+            @ApiResponse(responseCode = "204", description = "Offer was deleted successfully"),
+            @ApiResponse(responseCode = "403", description = "Authenticated user is not the author"),
+            @ApiResponse(responseCode = "404", description = "Offer not found")
     })
     @DeleteMapping("/{offerId}")
     public ResponseEntity<Void> deleteOffer(@PathVariable UUID offerId) {
