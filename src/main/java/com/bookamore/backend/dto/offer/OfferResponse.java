@@ -2,6 +2,7 @@ package com.bookamore.backend.dto.offer;
 
 import com.bookamore.backend.entity.enums.OfferStatus;
 import com.bookamore.backend.entity.enums.OfferType;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
@@ -9,6 +10,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Data
@@ -29,4 +31,8 @@ public class OfferResponse {
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private Long favoritesCount;
+
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    private LocalDateTime createdDate;
+
 }
