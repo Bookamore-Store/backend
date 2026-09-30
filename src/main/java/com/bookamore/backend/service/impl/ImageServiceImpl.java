@@ -2,14 +2,18 @@ package com.bookamore.backend.service.impl;
 
 import com.bookamore.backend.dto.image.ImageRequest;
 import com.bookamore.backend.dto.image.ImageResponse;
+import com.bookamore.backend.entity.Book;
 import com.bookamore.backend.entity.Image;
+import com.bookamore.backend.entity.Offer;
 import com.bookamore.backend.entity.enums.EntityType;
+import com.bookamore.backend.exception.ImageLimitExceededException;
 import com.bookamore.backend.exception.ResourceNotFoundException;
 import com.bookamore.backend.mapper.image.ImageMapper;
 import com.bookamore.backend.repository.BookRepository;
 import com.bookamore.backend.repository.ImageRepository;
 import com.bookamore.backend.repository.ImageStorageRepository;
 import com.bookamore.backend.repository.OfferRepository;
+import com.bookamore.backend.service.AccessCheckService;
 import com.bookamore.backend.service.ImageService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +44,7 @@ public class ImageServiceImpl implements ImageService {
     private final ImageMapper imageMapper;
     private final BookRepository bookRepository;
     private final OfferRepository offerRepository;
+    private final AccessCheckService accessCheckService;
 
     @Value("${file.hash-algorithm}")
     private String hash_algorithm;
@@ -91,6 +96,7 @@ public class ImageServiceImpl implements ImageService {
         UUID entityId = imageRequest.getEntityId();
         MultipartFile imageFile = imageRequest.getFile();
 
+        requireEntityAuthor(entityType, entityId);
         validateEntity(entityType, entityId);
         validateImageFileToSave(entityType, imageFile);
 
@@ -226,10 +232,10 @@ public class ImageServiceImpl implements ImageService {
         if (countOfImages >= limitCountOfImagesByType) {
             log.warn("Image upload attempt for entity that has reached the maximum allowed number of images! " +
                             "Limit: {}, Current count: {}",
-                    countOfImages,
-                    limitCountOfImagesByType
+                    limitCountOfImagesByType,
+                    countOfImages
             );
-            throw new IllegalStateException(
+            throw new ImageLimitExceededException(
                     String.format(
                             "%s with id %s has reached the maximum limit of %d images. " +
                                     "Current count: %d. Please delete an image before uploading a new one.",
@@ -308,6 +314,7 @@ public class ImageServiceImpl implements ImageService {
 
         Image image = imageRepository.findById(imageId)
                 .orElseThrow(() -> new ResourceNotFoundException("Image not found with id: " + imageId));
+        requireEntityAuthor(image.getEntityType(), image.getEntityId());
 
         String path = image.getPath();
 
@@ -342,5 +349,26 @@ public class ImageServiceImpl implements ImageService {
             throw new RuntimeException("Failed to delete image!");
         }
         imageRepository.delete(image);
+    }
+
+    private void requireEntityAuthor(EntityType entityType, UUID entityId) {
+        if (entityType == null || entityId == null) {
+            accessCheckService.requireOfferAuthor(null);
+            return;
+        }
+        final String ERROR_MESSAGE = "%s with ID %s does not exist";
+        Offer offer = switch (entityType) {
+            case OFFER -> offerRepository.findById(entityId)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            String.format(ERROR_MESSAGE, entityType, entityId)));
+            case BOOK -> {
+                Book book = bookRepository.findById(entityId)
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                String.format(ERROR_MESSAGE, entityType, entityId)));
+                yield book.getOffer();
+            }
+            default -> throw new IllegalArgumentException("Unsupported entity type: " + entityType);
+        };
+        accessCheckService.requireOfferAuthor(offer);
     }
 }

@@ -18,8 +18,8 @@ import com.bookamore.backend.repository.BookRepository;
 import com.bookamore.backend.repository.OfferRepository;
 import com.bookamore.backend.repository.UserRepository;
 import com.bookamore.backend.repository.spec.OfferSpecification;
+import com.bookamore.backend.service.AccessCheckService;
 import com.bookamore.backend.service.BookService;
-import com.bookamore.backend.service.ImageService;
 import com.bookamore.backend.service.OfferFavoriteCounter;
 import com.bookamore.backend.service.OfferFavoriteMarker;
 import com.bookamore.backend.service.OfferService;
@@ -48,11 +48,11 @@ public class OfferServiceImpl implements OfferService {
     private final UserRepository userRepository;
 
     private final BookService bookService;
-    private final ImageService imageService;
 
     private final OfferMapper offerMapper;
     private final OfferFavoriteMarker offerFavoriteMarker;
     private final OfferFavoriteCounter offerFavoriteCounter;
+    private final AccessCheckService accessCheckService;
 
     private static final Set<String> BOOK_FIELDS = Set.of(
             "title", "yearOfRelease", "description", "condition", "authorName"
@@ -67,11 +67,11 @@ public class OfferServiceImpl implements OfferService {
                 .orElseThrow(() -> new IllegalArgumentException("Provided OfferRequest with sellerId = null"));
 
         Book book = bookRepository.findById(bookId).orElseThrow(
-                () -> new ResourceNotFoundException(String.format("Book not found with id: %d. Please, ensure the book exists before this operation", bookId))
+                () -> new ResourceNotFoundException(String.format("Book not found with id: %s. Please, ensure the book exists before this operation", bookId))
         );
 
         User user = userRepository.findById(sellerId).orElseThrow(
-                () -> new ResourceNotFoundException(String.format("User not found with id: %d. Please, ensure the user exists before this operation", sellerId))
+                () -> new ResourceNotFoundException(String.format("User not found with id: %s. Please, ensure the user exists before this operation", sellerId))
         );
 
         Offer offer = offerMapper.toEntity(request);
@@ -206,6 +206,7 @@ public class OfferServiceImpl implements OfferService {
         Offer existingOffer = offerRepository.findById(offerId).orElseThrow(
                 () -> new ResourceNotFoundException("Offer not found with id: " + offerId)
         );
+        accessCheckService.requireOfferAuthor(existingOffer);
 
         Offer patch = offerMapper.toEntity(request);
 
@@ -267,6 +268,7 @@ public class OfferServiceImpl implements OfferService {
         Offer offer = offerRepository.findById(offerId).orElseThrow(
                 () -> new ResourceNotFoundException("Offer not found with id: " + offerId)
         );
+        accessCheckService.requireOfferAuthor(offer);
         offerRepository.delete(offer);
     }
 
