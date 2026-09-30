@@ -9,3 +9,5 @@ databaseChangeLog:
       file: db/changelog/changes/004_create_chat.sql
   - include:
       file: db/changelog/changes/005_add_user_password_reset_columns.sql
+  - include:
+      file: db/changelog/changes/006_drop_books_images.sql
