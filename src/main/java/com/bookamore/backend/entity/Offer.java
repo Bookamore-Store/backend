@@ -7,8 +7,12 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
+import org.hibernate.annotations.BatchSize;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -40,6 +44,14 @@ public class Offer extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private OfferStatus status;
+
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "entity_id", referencedColumnName = "id", insertable = false, updatable = false)
+    @SQLRestriction("entity_type = 'OFFER'")
+    @BatchSize(size = 10)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private List<Image> images = new ArrayList<>();
 
     @ToString.Include(name = "userId")
     private UUID getUserId() {

@@ -33,7 +33,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -51,8 +50,6 @@ public class ImageServiceImpl implements ImageService {
     private MessageDigest digest;
 
     private final static String IMAGE_PATH_TEMPLATE = "/img/%s/%s";// '/img/{SUB_DIRECTORY}/{FILE_NAME}'
-    private final static String IMAGE_SUBDIR_REGEXP = "^/img/(.+)/.+$";
-    private final static String IMAGE_FILENAME_REGEXP = "^/img/.+/(.+)$";
 
     /**
      * Maximum number of images allowed per entity type.
@@ -315,39 +312,7 @@ public class ImageServiceImpl implements ImageService {
         Image image = imageRepository.findById(imageId)
                 .orElseThrow(() -> new ResourceNotFoundException("Image not found with id: " + imageId));
         requireEntityAuthor(image.getEntityType(), image.getEntityId());
-
-        String path = image.getPath();
-
-        String subdir = Pattern.compile(IMAGE_SUBDIR_REGEXP)
-                .matcher(path)
-                .results()
-                .map(m -> m.group(1))
-                .findFirst()
-                .orElseThrow(
-                        () -> {
-                            log.warn("Failed to extract subdirectory from string='{}', imageId='{}'", path, imageId);
-                            return new RuntimeException("Failed to extract subdirectory from path!");
-                        }
-                );
-
-        String fileName = Pattern.compile(IMAGE_FILENAME_REGEXP)
-                .matcher(path)
-                .results()
-                .map(m -> m.group(1))
-                .findFirst()
-                .orElseThrow(
-                        () -> {
-                            log.warn("Failed to extract file name from string='{}', imageId='{}'", path, imageId);
-                            return new RuntimeException("Failed to extract file name from path!");
-                        }
-                );
-
-        try {
-            imageStorageRepository.deleteImage(fileName, subdir);
-        } catch (IOException e) {
-            log.error("Failed to delete image: {}", e.toString());
-            throw new RuntimeException("Failed to delete image!");
-        }
+        // The file in storage is deleted by ImageStorageCleanupListener after the transaction commits.
         imageRepository.delete(image);
     }
 

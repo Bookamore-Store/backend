@@ -17,6 +17,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
 import org.hibernate.annotations.BatchSize;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -64,8 +65,10 @@ public class Book extends BaseEntity {
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "entity_id", referencedColumnName = "id", insertable = false, updatable = false)
-    @org.hibernate.annotations.Where(clause = "entity_type = 'BOOK'")
+    @SQLRestriction("entity_type = 'BOOK'")
     @BatchSize(size = 10)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private List<Image> images = new ArrayList<>();
 
     @ToString.Include(name = "offerId")
