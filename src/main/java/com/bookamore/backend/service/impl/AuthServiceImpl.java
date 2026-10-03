@@ -8,6 +8,7 @@ import com.bookamore.backend.entity.User;
 import com.bookamore.backend.jwt.JwtTokenService;
 import com.bookamore.backend.mapper.user.UserMapper;
 import com.bookamore.backend.service.AuthService;
+import com.bookamore.backend.service.PasswordResetService;
 import com.bookamore.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -20,6 +21,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserMapper userMapper;
     private final JwtTokenService tokenService;
     private final PasswordEncoder encoder;
+    private final PasswordResetService passwordResetService;
 
     @Override
     public SignUpResponse signUp(SignUpRequest request) {
@@ -31,7 +33,10 @@ public class AuthServiceImpl implements AuthService {
     public SignInResponse signIn(SignInRequest request) {
         return userService.findByEmailForAuth(request.getEmail())
                 .filter(user -> encoder.matches(request.getPassword(), user.getPassword()))
-                .map(user -> tokenService.generateToken(user.getId()))
+                .map(user -> {
+                    passwordResetService.clearResetCode(user.getId());
+                    return tokenService.generateToken(user.getId());
+                })
                 .map(SignInResponse::ok)
                 .orElseGet(SignInResponse::error);
     }
