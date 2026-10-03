@@ -33,12 +33,6 @@ public class S3StorageProperties {
     private String secretKey;
 
     /**
-     * OCI public object URL base ending in {@code /n/{namespace}/b/{bucket}/o}.
-     */
-    @NotBlank
-    private String publicBaseUrl;
-
-    /**
      * Path-style URLs ({@code endpoint/bucket/key}) are required by most
      * S3-compatible servers. Virtual-hosted style is AWS S3's default.
      */
