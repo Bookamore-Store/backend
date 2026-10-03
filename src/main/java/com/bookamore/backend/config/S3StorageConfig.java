@@ -2,7 +2,6 @@ package com.bookamore.backend.config;
 
 import com.bookamore.backend.repository.ImageStorageRepository;
 import com.bookamore.backend.repository.impl.ImageS3StorageRepositoryImpl;
-import com.bookamore.backend.service.impl.S3ImageUrlService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -31,9 +30,14 @@ public class S3StorageConfig {
 
     @Bean(destroyMethod = "close")
     public S3Client s3Client() {
+        AwsBasicCredentials credentials = AwsBasicCredentials.create(
+                properties.getAccessKey(),
+                properties.getSecretKey()
+        );
+
         var builder = S3Client.builder()
                 .region(Region.of(properties.getRegion()))
-                .credentialsProvider(credentialsProvider())
+                .credentialsProvider(StaticCredentialsProvider.create(credentials))
                 .serviceConfiguration(S3Configuration.builder()
                         .pathStyleAccessEnabled(properties.isPathStyleAccess())
                         .build())
@@ -54,21 +58,8 @@ public class S3StorageConfig {
         return builder.build();
     }
 
-    @Bean
-    public S3ImageUrlService s3ImageUrlService() {
-        String publicBaseUrl = properties.getPublicBaseUrl().replaceAll("/+$", "");
-        return new S3ImageUrlService(publicBaseUrl);
-    }
-
     @Bean(ImageStorageRoutingConfig.S3_BEAN)
     public ImageStorageRepository s3ImageStorageRepository(S3Client s3Client) {
         return new ImageS3StorageRepositoryImpl(s3Client, properties.getBucket());
-    }
-
-    private StaticCredentialsProvider credentialsProvider() {
-        return StaticCredentialsProvider.create(AwsBasicCredentials.create(
-                properties.getAccessKey(),
-                properties.getSecretKey()
-        ));
     }
 }

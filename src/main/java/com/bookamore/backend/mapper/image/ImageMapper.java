@@ -9,17 +9,14 @@ import org.mapstruct.Mapping;
 import org.mapstruct.MappingConstants;
 
 @Mapper(
-        componentModel = MappingConstants.ComponentModel.SPRING,
-        uses = ImageUrlMapper.class
+        componentModel = MappingConstants.ComponentModel.SPRING
 )
 public interface ImageMapper {
 
-    @Mapping(target = "path", source = "path", qualifiedByName = "imageUrl")
     ImageResponse toResponse(Image image);
 
     @Mapping(target = "path", source = "pathOfSavedFile")
     Image toEntity(ImageRequest imageRequest, String pathOfSavedFile);
 
-    @Mapping(target = "path", source = "path", qualifiedByName = "imageUrl")
     ImageShortResponse toShortResponse(Image image);
 }
