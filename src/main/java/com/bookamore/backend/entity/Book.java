@@ -12,6 +12,7 @@ import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -66,6 +67,7 @@ public class Book extends BaseEntity {
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "entity_id", referencedColumnName = "id", insertable = false, updatable = false)
     @SQLRestriction("entity_type = 'BOOK'")
+    @OrderBy("id ASC")
     @BatchSize(size = 10)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
