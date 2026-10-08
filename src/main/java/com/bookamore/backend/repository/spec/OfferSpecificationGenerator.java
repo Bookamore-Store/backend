@@ -3,7 +3,6 @@ package com.bookamore.backend.repository.spec;
 import com.bookamore.backend.dto.offer.OfferFilterRequest;
 import com.bookamore.backend.dto.offer.PriceRange;
 import com.bookamore.backend.entity.Book;
-import com.bookamore.backend.entity.BookAuthor_;
 import com.bookamore.backend.entity.BookGenre_;
 import com.bookamore.backend.entity.Book_;
 import com.bookamore.backend.entity.Offer;
@@ -29,7 +28,7 @@ import java.util.Set;
 public class OfferSpecificationGenerator {
 
     private static final Set<String> SUPPORTED_BOOK_SORT_FIELDS = Set.of(
-            Book_.TITLE, Book_.YEAR_OF_RELEASE, Book_.CONDITION//, Book_.AUTHOR_NAME
+            Book_.TITLE, Book_.YEAR_OF_RELEASE, Book_.CONDITION, Book_.AUTHOR_NAME
     );
     private static final Set<String> SUPPORTED_OFFER_SORT_FIELDS = Set.of(
             Offer_.CREATED_DATE, Offer_.LAST_MODIFIED_DATE, Offer_.PRICE, Offer_.TYPE
@@ -49,7 +48,7 @@ public class OfferSpecificationGenerator {
                     List<String> authors = filter.getAuthor().stream()
                             .filter(name -> name != null && !name.isBlank()).toList();
                     if (!authors.isEmpty()) {
-                        predicates.add(matchesAuthors(authors, root, query, cb));
+                        predicates.add(matchesAuthors(authors, root, cb));
                     }
                 }
                 if (filter.getTitle() != null && !filter.getTitle().isBlank()) {
@@ -97,23 +96,18 @@ public class OfferSpecificationGenerator {
         return cb.exists(subquery);
     }
 
-    private static Predicate matchesAuthors(List<String> authors, Root<Offer> root,
-                                            CriteriaQuery<?> query, CriteriaBuilder cb) {
-        Subquery<Integer> subquery = query.subquery(Integer.class);
-        Join<Book, ?> author = subquery.correlate(root).<Offer, Book>join(Offer_.BOOK).join(Book_.AUTHORS);
+    private static Predicate matchesAuthors(List<String> authors, Root<Offer> root, CriteriaBuilder cb) {
+        Expression<String> authorName = cb.lower(root.get(Offer_.BOOK).get(Book_.AUTHOR_NAME));
         Predicate[] matches = authors.stream()
-                .map(name -> cb.like(cb.lower(author.get(BookAuthor_.NAME)), "%" + name.toLowerCase(Locale.ROOT) + "%"))
+                .map(name -> cb.like(authorName, "%" + name.toLowerCase(Locale.ROOT) + "%"))
                 .toArray(Predicate[]::new);
-        subquery.select(cb.literal(1)).where(cb.or(matches));
-        return cb.exists(subquery);
+        return cb.or(matches);
     }
 
     private static Expression<?> sortExpression(Sort.Order order, Root<Offer> root, CriteriaBuilder cb) {
         String field = order.getProperty();
         if (SUPPORTED_BOOK_SORT_FIELDS.contains(field)) {
-            if (field.equals(Book_.TITLE)
-//                || field.equals(Book_.AUTHOR_NAME)
-            ) {
+            if (field.equals(Book_.TITLE) || field.equals(Book_.AUTHOR_NAME)) {
                 return cb.lower(root.get(Offer_.BOOK).get(field));
             }
             return root.get(Offer_.BOOK).get(field);

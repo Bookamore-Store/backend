@@ -34,10 +34,13 @@ public class Book extends BaseEntity {
 
     @Column(nullable = false)
     private String title;
+
     @Column(name = "year_of_release", nullable = false)
     private Integer yearOfRelease;
+
     @Column(length = 500)
     private String description;
+
     @Column
     private String isbn;
 
@@ -45,14 +48,8 @@ public class Book extends BaseEntity {
     @Column(nullable = false)
     private BookCondition condition;
 
-    @ManyToMany
-    @JoinTable(
-            name = "books_authors",
-            joinColumns = @JoinColumn(nullable = false, name = "book_id"),
-            inverseJoinColumns = @JoinColumn(nullable = false, name = "author_id")
-    )
-    @BatchSize(size = 10)
-    private List<BookAuthor> authors = new ArrayList<>();
+    @Column(name = "author_name", columnDefinition = "text")
+    private String authorName;
 
     @ManyToMany
     @JoinTable(
@@ -70,10 +67,4 @@ public class Book extends BaseEntity {
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     private List<Image> images = new ArrayList<>();
-
-    @ToString.Include(name = "offerId")
-    private String bookIdToString() {
-        return offer == null ? "null" : String.valueOf(offer.getId());
-    }
-
 }

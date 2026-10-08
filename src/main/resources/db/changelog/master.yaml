@@ -11,3 +11,5 @@ databaseChangeLog:
       file: db/changelog/changes/005_add_user_password_reset_columns.sql
   - include:
       file: db/changelog/changes/006_drop_books_images.sql
+  - include:
+      file: db/changelog/changes/007_replace_book_authors_with_author_name.sql
