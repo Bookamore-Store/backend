@@ -2,7 +2,7 @@ package com.bookamore.backend.controller;
 
 import com.bookamore.backend.annotation.No401Swgr;
 import com.bookamore.backend.annotation.No404Swgr;
-import com.bookamore.backend.dto.offer.OfferFilter;
+import com.bookamore.backend.dto.offer.OfferFilterRequest;
 import com.bookamore.backend.dto.offer.OfferRequest;
 import com.bookamore.backend.dto.offer.OfferResponse;
 import com.bookamore.backend.dto.offer.OfferUpdateRequest;
@@ -10,7 +10,6 @@ import com.bookamore.backend.dto.offer.OfferWithBookRequest;
 import com.bookamore.backend.dto.offer.OfferWithBookResponse;
 import com.bookamore.backend.service.OfferService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -18,6 +17,11 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.data.domain.Sort;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -28,7 +32,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -46,25 +49,11 @@ public class OfferController {
     @GetMapping
     @ResponseStatus(HttpStatus.OK)
     @Operation(summary = "Get offers page", description = "Get offers page")
-    public Page<OfferResponse> getOffersPage(@RequestParam(defaultValue = "0") Integer page,
-                                             @RequestParam(defaultValue = "5") Integer size,
-                                             @Parameter(
-                                                     description = "Sort by field",
-                                                     schema = @Schema(
-                                                             allowableValues = {"id", "createdDate",
-                                                                     "lastModifiedDate", "price", "type", "status",
-                                                                     /*book fields*/
-                                                                     "title", "yearOfRelease", "description",
-                                                                     "condition", "authorName"}
-                                                     )
-                                             )
-                                             @RequestParam(defaultValue = "createdDate") String sortBy,
-                                             @Parameter(
-                                                     description = "Sort direction: `asc` or `desc`",
-                                                     schema = @Schema(allowableValues = {"asc", "desc"})
-                                             )
-                                             @RequestParam(defaultValue = "desc") String sortDir) {
-        return offerService.getOffersPage(page, size, sortBy, sortDir);
+    public Page<OfferResponse> getOffersPage(
+            @Validated @ParameterObject OfferFilterRequest filter,
+            @ParameterObject @PageableDefault(size = 10) Pageable pageable) {
+        pageable = resolveSort(pageable);
+        return offerService.getOffersPage(filter, pageable);
     }
 
     @No401Swgr
@@ -72,29 +61,19 @@ public class OfferController {
     @Operation(summary = "Get offers page with book fields", description = "Get offers page with book fields")
     @GetMapping("/with-book")
     @ResponseStatus(HttpStatus.OK)
-    public Page<OfferWithBookResponse> getOffersWithBookPage(@ParameterObject OfferFilter filter,
-                                                             @RequestParam(defaultValue = "0") Integer page,
-                                                             @RequestParam(defaultValue = "5") Integer size,
-                                                             @Parameter(
-                                                                     description = "Sort by field",
-                                                                     schema = @Schema(
-                                                                             allowableValues = {"id", "createdDate",
-                                                                                     "lastModifiedDate", "price",
-                                                                                     "type", "status",
-                                                                                     /*book fields*/
-                                                                                     "title", "yearOfRelease",
-                                                                                     "description", "condition",
-                                                                                     "authorName"}
-                                                                     )
-                                                             )
-                                                             @RequestParam(defaultValue = "createdDate") String sortBy,
-                                                             @Parameter(
-                                                                     description = "Sort direction: `asc` or `desc`",
-                                                                     schema = @Schema(allowableValues = {"asc", "desc"})
-                                                             )
-                                                             @RequestParam(defaultValue = "desc") String sortDir) {
+    public Page<OfferWithBookResponse> getOffersWithBookPage(
+            @Validated @ParameterObject OfferFilterRequest filter,
+            @ParameterObject @PageableDefault(size = 10) Pageable pageable) {
+        pageable = resolveSort(pageable);
+        return offerService.getOffersWithBooksPage(filter, pageable);
+    }
 
-        return offerService.getOffersWithBooksPage(filter, page, size, sortBy, sortDir);
+    private Pageable resolveSort(Pageable pageable) {
+        Sort sort = pageable.getSort();
+        if (sort.getOrderFor("createdDate") == null) {
+            sort = sort.and(Sort.by(Sort.Direction.DESC, "createdDate"));
+        }
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
     }
 
     @No401Swgr

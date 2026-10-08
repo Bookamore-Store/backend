@@ -1,6 +1,6 @@
 package com.bookamore.backend.service;
 
-import com.bookamore.backend.dto.offer.OfferFilter;
+import com.bookamore.backend.dto.offer.OfferFilterRequest;
 import com.bookamore.backend.dto.offer.OfferRequest;
 import com.bookamore.backend.dto.offer.OfferResponse;
 import com.bookamore.backend.dto.offer.OfferUpdateRequest;
@@ -8,6 +8,7 @@ import com.bookamore.backend.dto.offer.OfferWithBookRequest;
 import com.bookamore.backend.dto.offer.OfferWithBookResponse;
 import com.bookamore.backend.entity.Offer;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.UUID;
 
@@ -18,13 +19,9 @@ public interface OfferService {
 
     OfferWithBookResponse create(OfferWithBookRequest request);
 
-    Page<Offer> getOffersEntityPage(Integer page, Integer size, String sortBy, String sortDir);
+    Page<OfferResponse> getOffersPage(OfferFilterRequest filter, Pageable pageable);
 
-    Page<Offer> getOffersEntityPageWithFilter(OfferFilter filter, Integer page, Integer size, String sortBy, String sortDir);
-
-    Page<OfferResponse> getOffersPage(Integer page, Integer size, String sortBy, String sortDir);
-
-    Page<OfferWithBookResponse> getOffersWithBooksPage(OfferFilter filter, Integer page, Integer size, String sortBy, String sortDir);
+    Page<OfferWithBookResponse> getOffersWithBooksPage(OfferFilterRequest filter, Pageable pageable);
 
     Offer getEntityById(UUID offerId);
 
