@@ -12,6 +12,7 @@ import com.bookamore.backend.mapper.book.BookMapper;
 import com.bookamore.backend.repository.BookAuthorRepository;
 import com.bookamore.backend.repository.BookGenreRepository;
 import com.bookamore.backend.repository.BookRepository;
+import com.bookamore.backend.service.AccessCheckService;
 import com.bookamore.backend.service.BookService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +34,7 @@ public class BookServiceImpl implements BookService {
     private final BookGenreRepository bookGenreRepository;
     private final BookAuthorRepository bookAuthorRepository;
     private final BookMapper bookMapper;
+    private final AccessCheckService accessCheckService;
 
     @Transactional
     public Book createBook(BookRequest bookRequest) {
@@ -109,6 +111,7 @@ public class BookServiceImpl implements BookService {
     public BookResponse update(UUID bookId, BookUpdateRequest bookUpdateRequest) {
         Book existingBook = bookRepository.findById(bookId)
                 .orElseThrow(() -> new ResourceNotFoundException("Book not found with id: " + bookId));
+        accessCheckService.requireOfferAuthor(existingBook.getOffer());
 
         Book patch = bookMapper.toEntity(bookUpdateRequest);
 

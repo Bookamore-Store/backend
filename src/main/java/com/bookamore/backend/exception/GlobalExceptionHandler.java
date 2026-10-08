@@ -69,6 +69,33 @@ public class GlobalExceptionHandler {
                 .build();
     }
 
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    @ExceptionHandler(ForbiddenAccessException.class)
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden: the authenticated user is not allowed to perform this action",
+            content = @Content(
+                    schema = @Schema(implementation = ErrorResponse.class),
+                    examples = @ExampleObject(
+                            name = "Forbidden Example",
+                            value = "{\"timestamp\": \"2025-08-16T12:00:00.000Z\", \"status\": 403, \"error\": \"Forbidden\", \"message\": \"Only the author can perform this action\", \"path\": \"/api/v1/offers/{offerId}\"}"
+                    )
+            )
+    )
+    public ErrorResponse handleForbiddenAccessException(ForbiddenAccessException ex, HttpServletRequest request) {
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.FORBIDDEN.value())
+                .error(HttpStatus.FORBIDDEN.getReasonPhrase())
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .build();
+
+        log.warn("ForbiddenAccessException: {}", errorResponse);
+
+        return errorResponse;
+    }
+
     @ResponseStatus(HttpStatus.NOT_FOUND)
     @ExceptionHandler(ResourceNotFoundException.class)
     @ApiResponse(
@@ -97,6 +124,33 @@ public class GlobalExceptionHandler {
         return errorResponse;
     }
 
+    @ResponseStatus(HttpStatus.CONFLICT)
+    @ExceptionHandler(ImageLimitExceededException.class)
+    @ApiResponse(
+            responseCode = "409",
+            description = "Conflict: the entity has reached the maximum number of images",
+            content = @Content(
+                    schema = @Schema(implementation = ErrorResponse.class),
+                    examples = @ExampleObject(
+                            name = "Image Limit Exceeded Example",
+                            value = "{\"timestamp\": \"2025-08-13T10:00:00.000Z\", \"status\": 409, \"error\": \"Conflict\", \"message\": \"BOOK with id 018d4f1a-5b03-71d4-c001-000000000001 has reached the maximum limit of 5 images. Current count: 5. Please delete an image before uploading a new one.\", \"path\": \"/api/v1/images/upload\"}"
+                    )
+            )
+    )
+    public ErrorResponse handleImageLimitExceededException(ImageLimitExceededException ex, HttpServletRequest request) {
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.CONFLICT.value())
+                .error(HttpStatus.CONFLICT.getReasonPhrase())
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .build();
+
+        log.warn("ImageLimitExceededException: {}", errorResponse);
+
+        return errorResponse;
+    }
+
     @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
     @ExceptionHandler(UnprocessableRequestException.class)
     @ApiResponse(
@@ -121,6 +175,21 @@ public class GlobalExceptionHandler {
 
         log.warn("UnprocessableRequestException: {}", errorResponse);
 
+        return errorResponse;
+    }
+
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(InvalidResetCodeException.class)
+    public ErrorResponse handleInvalidResetCodeException(InvalidResetCodeException ex, HttpServletRequest request) {
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error(HttpStatus.BAD_REQUEST.getReasonPhrase())
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .build();
+
+        log.warn("InvalidResetCodeException: {}", errorResponse);
         return errorResponse;
     }
 

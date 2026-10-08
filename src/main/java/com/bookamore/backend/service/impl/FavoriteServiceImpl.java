@@ -6,7 +6,6 @@ import com.bookamore.backend.exception.ResourceNotFoundException;
 import com.bookamore.backend.mapper.offer.OfferMapper;
 import com.bookamore.backend.repository.FavoriteRepository;
 import com.bookamore.backend.repository.OfferRepository;
-import com.bookamore.backend.repository.UserRepository;
 import com.bookamore.backend.service.FavoriteService;
 import com.bookamore.backend.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +26,6 @@ public class FavoriteServiceImpl implements FavoriteService {
 
     private final FavoriteRepository favoriteRepository;
     private final OfferRepository offerRepository;
-    private final UserRepository userRepository;
     private final OfferMapper offerMapper;
 
     @Override
@@ -61,16 +59,6 @@ public class FavoriteServiceImpl implements FavoriteService {
     @Override
     public Page<OfferResponse> getFavorites(Integer page, Integer size, String sortBy, String sortDir) {
         Page<OfferResponse> fp = getFavoritesByUserId(SecurityUtils.getAuthenticatedUserId(), page, size, sortBy, sortDir);
-        fp.forEach(o -> o.setFavorite(true));
-        return fp;
-    }
-
-    @Override
-    public Page<OfferResponse> getFavorites(UUID userId, Integer page, Integer size, String sortBy, String sortDir) {
-        if (!userRepository.existsById(userId)) {
-            throw new ResourceNotFoundException("Not found User with uuid = " + userId);
-        }
-        Page<OfferResponse> fp = getFavoritesByUserId(userId, page, size, sortBy, sortDir);
         fp.forEach(o -> o.setFavorite(true));
         return fp;
     }

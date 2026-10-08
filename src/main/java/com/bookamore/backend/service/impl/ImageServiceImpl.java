@@ -2,14 +2,18 @@ package com.bookamore.backend.service.impl;
 
 import com.bookamore.backend.dto.image.ImageRequest;
 import com.bookamore.backend.dto.image.ImageResponse;
+import com.bookamore.backend.entity.Book;
 import com.bookamore.backend.entity.Image;
+import com.bookamore.backend.entity.Offer;
 import com.bookamore.backend.entity.enums.EntityType;
+import com.bookamore.backend.exception.ImageLimitExceededException;
 import com.bookamore.backend.exception.ResourceNotFoundException;
 import com.bookamore.backend.mapper.image.ImageMapper;
 import com.bookamore.backend.repository.BookRepository;
 import com.bookamore.backend.repository.ImageRepository;
 import com.bookamore.backend.repository.ImageStorageRepository;
 import com.bookamore.backend.repository.OfferRepository;
+import com.bookamore.backend.service.AccessCheckService;
 import com.bookamore.backend.service.ImageService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +33,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -40,14 +43,13 @@ public class ImageServiceImpl implements ImageService {
     private final ImageMapper imageMapper;
     private final BookRepository bookRepository;
     private final OfferRepository offerRepository;
+    private final AccessCheckService accessCheckService;
 
     @Value("${file.hash-algorithm}")
     private String hash_algorithm;
     private MessageDigest digest;
 
     private final static String IMAGE_PATH_TEMPLATE = "/img/%s/%s";// '/img/{SUB_DIRECTORY}/{FILE_NAME}'
-    private final static String IMAGE_SUBDIR_REGEXP = "^/img/(.+)/.+$";
-    private final static String IMAGE_FILENAME_REGEXP = "^/img/.+/(.+)$";
 
     /**
      * Maximum number of images allowed per entity type.
@@ -91,6 +93,7 @@ public class ImageServiceImpl implements ImageService {
         UUID entityId = imageRequest.getEntityId();
         MultipartFile imageFile = imageRequest.getFile();
 
+        requireEntityAuthor(entityType, entityId);
         validateEntity(entityType, entityId);
         validateImageFileToSave(entityType, imageFile);
 
@@ -214,7 +217,7 @@ public class ImageServiceImpl implements ImageService {
                     entityType,
                     entityId
             );
-            throw new IllegalArgumentException(
+            throw new ResourceNotFoundException(
                     String.format("%s with ID %s does not exist", entityType, entityId)
             );
         }
@@ -226,10 +229,10 @@ public class ImageServiceImpl implements ImageService {
         if (countOfImages >= limitCountOfImagesByType) {
             log.warn("Image upload attempt for entity that has reached the maximum allowed number of images! " +
                             "Limit: {}, Current count: {}",
-                    countOfImages,
-                    limitCountOfImagesByType
+                    limitCountOfImagesByType,
+                    countOfImages
             );
-            throw new IllegalStateException(
+            throw new ImageLimitExceededException(
                     String.format(
                             "%s with id %s has reached the maximum limit of %d images. " +
                                     "Current count: %d. Please delete an image before uploading a new one.",
@@ -308,39 +311,29 @@ public class ImageServiceImpl implements ImageService {
 
         Image image = imageRepository.findById(imageId)
                 .orElseThrow(() -> new ResourceNotFoundException("Image not found with id: " + imageId));
-
-        String path = image.getPath();
-
-        String subdir = Pattern.compile(IMAGE_SUBDIR_REGEXP)
-                .matcher(path)
-                .results()
-                .map(m -> m.group(1))
-                .findFirst()
-                .orElseThrow(
-                        () -> {
-                            log.warn("Failed to extract subdirectory from string='{}', imageId='{}'", path, imageId);
-                            return new RuntimeException("Failed to extract subdirectory from path!");
-                        }
-                );
-
-        String fileName = Pattern.compile(IMAGE_FILENAME_REGEXP)
-                .matcher(path)
-                .results()
-                .map(m -> m.group(1))
-                .findFirst()
-                .orElseThrow(
-                        () -> {
-                            log.warn("Failed to extract file name from string='{}', imageId='{}'", path, imageId);
-                            return new RuntimeException("Failed to extract file name from path!");
-                        }
-                );
-
-        try {
-            imageStorageRepository.deleteImage(fileName, subdir);
-        } catch (IOException e) {
-            log.error("Failed to delete image: {}", e.toString());
-            throw new RuntimeException("Failed to delete image!");
-        }
+        requireEntityAuthor(image.getEntityType(), image.getEntityId());
+        // The file in storage is deleted by ImageStorageCleanupListener after the transaction commits.
         imageRepository.delete(image);
+    }
+
+    private void requireEntityAuthor(EntityType entityType, UUID entityId) {
+        if (entityType == null || entityId == null) {
+            accessCheckService.requireOfferAuthor(null);
+            return;
+        }
+        final String ERROR_MESSAGE = "%s with ID %s does not exist";
+        Offer offer = switch (entityType) {
+            case OFFER -> offerRepository.findById(entityId)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            String.format(ERROR_MESSAGE, entityType, entityId)));
+            case BOOK -> {
+                Book book = bookRepository.findById(entityId)
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                String.format(ERROR_MESSAGE, entityType, entityId)));
+                yield book.getOffer();
+            }
+            default -> throw new IllegalArgumentException("Unsupported entity type: " + entityType);
+        };
+        accessCheckService.requireOfferAuthor(offer);
     }
 }
