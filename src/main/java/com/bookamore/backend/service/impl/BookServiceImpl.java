@@ -4,12 +4,10 @@ import com.bookamore.backend.dto.book.BookRequest;
 import com.bookamore.backend.dto.book.BookResponse;
 import com.bookamore.backend.dto.book.BookUpdateRequest;
 import com.bookamore.backend.entity.Book;
-import com.bookamore.backend.entity.BookAuthor;
 import com.bookamore.backend.entity.BookGenre;
 import com.bookamore.backend.entity.enums.BookCondition;
 import com.bookamore.backend.exception.ResourceNotFoundException;
 import com.bookamore.backend.mapper.book.BookMapper;
-import com.bookamore.backend.repository.BookAuthorRepository;
 import com.bookamore.backend.repository.BookGenreRepository;
 import com.bookamore.backend.repository.BookRepository;
 import com.bookamore.backend.service.AccessCheckService;
@@ -32,7 +30,6 @@ import java.util.stream.Collectors;
 public class BookServiceImpl implements BookService {
     private final BookRepository bookRepository;
     private final BookGenreRepository bookGenreRepository;
-    private final BookAuthorRepository bookAuthorRepository;
     private final BookMapper bookMapper;
     private final AccessCheckService accessCheckService;
 
@@ -48,27 +45,6 @@ public class BookServiceImpl implements BookService {
     @Transactional
     public BookResponse create(BookRequest bookRequest) {
         return bookMapper.toResponse(createBook(bookRequest));
-    }
-
-    private List<BookAuthor> resolveAuthors(Book book) {
-        List<BookAuthor> managedAuthors = new ArrayList<>();
-        for (BookAuthor author : book.getAuthors()) {
-            String authorName = author.getName();
-            bookAuthorRepository.findByName(authorName).ifPresentOrElse(
-                    existedAuthor -> {
-                        existedAuthor.getBooks().add(book);
-                        managedAuthors.add(existedAuthor);
-                    },
-                    () -> {
-                        // new Author
-                        managedAuthors.add(
-                                bookAuthorRepository.save(author)
-                        );
-                    }
-            );
-        }
-
-        return managedAuthors;
     }
 
     private List<BookGenre> resolveGenres(Book book) {
@@ -92,7 +68,6 @@ public class BookServiceImpl implements BookService {
     }
 
     private void resolveReferences(Book book) {
-        book.setAuthors(resolveAuthors(book));
         book.setGenres(resolveGenres(book));
     }
 
@@ -120,8 +95,6 @@ public class BookServiceImpl implements BookService {
 
         boolean childrenModified = false;
 
-        childrenModified |= updateAuthors(existingBook, patch);
-
         childrenModified |= updateGenres(existingBook, patch);
 
         boolean anyModified = childrenModified | simpleFieldsModified;
@@ -142,6 +115,7 @@ public class BookServiceImpl implements BookService {
         boolean isModified = false;
 
         String newTitle = patch.getTitle();
+        String newAuthorName = patch.getAuthorName();
         String newDesc = patch.getDescription();
         String newIsbn = patch.getIsbn();
         BookCondition newCondition = patch.getCondition();
@@ -151,6 +125,10 @@ public class BookServiceImpl implements BookService {
             isModified = true;
         }
 
+        if (newAuthorName != null && !newAuthorName.equals(existingBook.getAuthorName())) {
+            existingBook.setAuthorName(newAuthorName);
+            isModified = true;
+        }
         if (newDesc != null && !newDesc.equals(existingBook.getDescription())) {
             existingBook.setDescription(newDesc);
             isModified = true;
@@ -167,44 +145,6 @@ public class BookServiceImpl implements BookService {
         }
 
         return isModified;
-    }
-
-    private boolean updateAuthors(Book existingBook, Book patch) {
-        List<BookAuthor> patchAuthors = patch.getAuthors();
-
-        if (patchAuthors == null || patchAuthors.equals(existingBook.getAuthors())) {
-            return false;
-        }
-        if (patchAuthors.stream().anyMatch(a -> a.getName() == null || a.getName().isBlank())) {
-            throw new IllegalArgumentException("One or more provided authors has no name " +
-                    "(name == null or name is blank)");
-        }
-
-        Set<String> patchAuthorsNames = patchAuthors.stream().map(BookAuthor::getName).collect(Collectors.toSet());
-
-        List<BookAuthor> existingAuthors = existingBook.getAuthors();
-        existingAuthors.removeIf(author -> !patchAuthorsNames.contains(author.getName())); // unassign author
-
-        Set<String> existingAuthorsNames = existingAuthors.stream()
-                .map(BookAuthor::getName).collect(Collectors.toSet());
-
-        for (String authorName : patchAuthorsNames) {
-            if (existingAuthorsNames.contains(authorName)) {
-                continue;
-            }
-
-            // assign existing author to book
-            bookAuthorRepository.findByName(authorName).ifPresentOrElse(
-                    existingAuthors::add,
-                    () -> {
-                        BookAuthor newAuthor = new BookAuthor();
-                        newAuthor.setName(authorName);
-                        existingAuthors.add(newAuthor);  // assign new author
-                        bookAuthorRepository.save(newAuthor);
-                    }
-            );
-        }
-        return true;
     }
 
     private boolean updateGenres(Book existingBook, Book patch) {
