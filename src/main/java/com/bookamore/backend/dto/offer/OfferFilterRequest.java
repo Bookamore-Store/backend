@@ -1,7 +1,6 @@
 package com.bookamore.backend.dto.offer;
 
 import com.bookamore.backend.entity.enums.BookCondition;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
@@ -37,7 +36,7 @@ public class OfferFilterRequest {
     @Parameter(description = "Book condition. Example: `condition=NEW&condition=USED`")
     private List<BookCondition> condition;
 
-    @Parameter(description = "ISBN. Example: `isbn=9789660300001&isbn=9789660300002`")
+    @Parameter(description = "ISBN. Example: `isbn=0596520689&isbn=9783161484100`")
     private List<String> isbn;
 
     @Parameter(description = "Year of release. Example: `yearOfRelease=1840&yearOfRelease=1911`")
