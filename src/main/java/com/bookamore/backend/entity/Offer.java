@@ -44,17 +44,4 @@ public class Offer extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private OfferStatus status;
-
-    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
-    @JoinColumn(name = "entity_id", referencedColumnName = "id", insertable = false, updatable = false)
-    @SQLRestriction("entity_type = 'OFFER'")
-    @BatchSize(size = 10)
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
-    private List<Image> images = new ArrayList<>();
-
-    @ToString.Include(name = "userId")
-    private UUID getUserId() {
-        return user != null ? user.getId() : null;
-    }
 }
