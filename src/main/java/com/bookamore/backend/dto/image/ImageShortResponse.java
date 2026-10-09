@@ -8,4 +8,5 @@ import java.util.UUID;
 public class ImageShortResponse {
     private UUID id;
     private String path;
+    private String description;
 }
