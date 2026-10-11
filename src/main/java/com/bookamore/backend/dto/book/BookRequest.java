@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+import org.hibernate.validator.constraints.ISBN;
 
 import java.util.List;
 
@@ -31,8 +32,8 @@ public class BookRequest {
     @Schema(example = "A Handbook of Agile Software Craftsmanship.", description = "Book description")
     private String description;
 
-    //TODO Validation
-    @Schema(example = "9783161484100", description = "ISBN number of the book")
+    @ISBN(type = ISBN.Type.ANY, message = "ISBN must be a valid ISBN-10 or ISBN-13.")
+    @Schema(example = "0596520689, 9783161484100", description = "Valid ISBN-10 or ISBN-13, with or without hyphens")
     private String isbn;
 
     @NotNull(message = "Book condition cannot be null.")

@@ -2,7 +2,8 @@ package com.bookamore.backend.controller;
 
 import com.bookamore.backend.annotation.No401Swgr;
 import com.bookamore.backend.annotation.No404Swgr;
-import com.bookamore.backend.dto.offer.OfferFilter;
+import com.bookamore.backend.dto.error.ErrorResponse;
+import com.bookamore.backend.dto.offer.OfferFilterRequest;
 import com.bookamore.backend.dto.offer.OfferRequest;
 import com.bookamore.backend.dto.offer.OfferResponse;
 import com.bookamore.backend.dto.offer.OfferUpdateRequest;
@@ -11,6 +12,11 @@ import com.bookamore.backend.dto.offer.OfferWithBookResponse;
 import com.bookamore.backend.service.OfferService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.Explode;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.enums.ParameterStyle;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -18,6 +24,11 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.data.domain.Sort;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -28,7 +39,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -39,62 +49,125 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OfferController {
 
+    private static final String PAGE_DESCRIPTION = """
+            Returns a page of offers matching the query filters. Values within one filter list are combined with OR;
+            different filters are combined with AND. Author and title filters match substrings without case sensitivity.
+            Pagination is zero-based: page defaults to 0 and size defaults to 10.
+            If no offers match, returns HTTP 200 with an empty content array.
+            Legacy genres is accepted as an alias for genre; explicit genre takes precedence.
+            Legacy sortBy/sortDir are converted to sort when sort is absent, with defaults createdDate/desc.
+            """;
+
+    private static final String SORT_DESCRIPTION = """
+            Sorting format: sort=field,asc or sort=field,desc. Without a direction, asc is used.
+            Repeat the parameter for multiple sort orders; their order defines priority:
+            sort=price,asc&sort=title,desc.
+
+            Supported fields:
+            - createdDate: offer creation date.
+            - lastModifiedDate: offer last modification date.
+            - price: offer price, numeric order.
+            - type: offer type (SELL, EXCHANGE, SELL_EXCHANGE), ordered by its stored string value.
+            - title: book title, case-insensitive order.
+            - yearOfRelease: book publication year, numeric order.
+            - condition: book condition (NEW, AS_NEW, USED), ordered by its stored string value.
+            - authorName: book author-name string, case-insensitive order.
+
+            createdDate,desc is appended as the last sort order unless createdDate is already present.
+            An explicit createdDate direction and position are preserved.
+            Without sorting parameters, the effective order is createdDate,desc.
+            Unsupported sort fields return HTTP 400. Explicit sort takes precedence over legacy sortBy/sortDir.
+            """;
     private final OfferService offerService;
 
     @No401Swgr
     @No404Swgr
     @GetMapping
     @ResponseStatus(HttpStatus.OK)
-    @Operation(summary = "Get offers page", description = "Get offers page")
-    public Page<OfferResponse> getOffersPage(@RequestParam(defaultValue = "0") Integer page,
-                                             @RequestParam(defaultValue = "5") Integer size,
-                                             @Parameter(
-                                                     description = "Sort by field",
-                                                     schema = @Schema(
-                                                             allowableValues = {"id", "createdDate",
-                                                                     "lastModifiedDate", "price", "type", "status",
-                                                                     /*book fields*/
-                                                                     "title", "yearOfRelease", "description",
-                                                                     "condition", "authorName"}
-                                                     )
-                                             )
-                                             @RequestParam(defaultValue = "createdDate") String sortBy,
-                                             @Parameter(
-                                                     description = "Sort direction: `asc` or `desc`",
-                                                     schema = @Schema(allowableValues = {"asc", "desc"})
-                                             )
-                                             @RequestParam(defaultValue = "desc") String sortDir) {
-        return offerService.getOffersPage(page, size, sortBy, sortDir);
+    @Operation(summary = "Get offers page", description = PAGE_DESCRIPTION + "Contains bookId for each offer.")
+    @Parameter(
+            name = "sort", in = ParameterIn.QUERY,
+            description = SORT_DESCRIPTION,
+            style = ParameterStyle.FORM, explode = Explode.TRUE,
+            array = @ArraySchema(schema = @Schema(type = "string", example = "price,asc"))
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Offers page returned successfully",
+                    useReturnTypeSchema = true,
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE)
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Unsupported sort field, invalid filter value, or invalid price range",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Unsupported sort field",
+                                    value = """
+                                            {"timestamp":"2026-10-08T12:00:00","status":400,"error":"Bad Request",
+                                             "message":"Unsupported sort field: unknown","path":"/api/v1/offers"}
+                                            """
+                            )
+                    )
+            )
+    })
+    public Page<OfferResponse> getOffersPage(
+            @Validated @ParameterObject OfferFilterRequest filter,
+            @ParameterObject @PageableDefault(size = 10) Pageable pageable) {
+        pageable = resolveSort(pageable);
+        return offerService.getOffersPage(filter, pageable);
     }
 
     @No401Swgr
     @No404Swgr
-    @Operation(summary = "Get offers page with book fields", description = "Get offers page with book fields")
+    @Operation(summary = "Get offers page with book fields", description = PAGE_DESCRIPTION + "Contains the nested book object for each offer.")
+    @Parameter(
+            name = "sort", in = ParameterIn.QUERY,
+            description = SORT_DESCRIPTION,
+            style = ParameterStyle.FORM, explode = Explode.TRUE,
+            array = @ArraySchema(schema = @Schema(type = "string", example = "price,asc"))
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Offers page returned successfully",
+                    useReturnTypeSchema = true,
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE)
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Unsupported sort field, invalid filter value, or invalid price range",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Unsupported sort field",
+                                    value = """
+                                            {"timestamp":"2026-10-08T12:00:00","status":400,"error":"Bad Request",
+                                             "message":"Unsupported sort field: unknown","path":"/api/v1/offers/with-book"}
+                                            """
+                            )
+                    )
+            )
+    })
     @GetMapping("/with-book")
     @ResponseStatus(HttpStatus.OK)
-    public Page<OfferWithBookResponse> getOffersWithBookPage(@ParameterObject OfferFilter filter,
-                                                             @RequestParam(defaultValue = "0") Integer page,
-                                                             @RequestParam(defaultValue = "5") Integer size,
-                                                             @Parameter(
-                                                                     description = "Sort by field",
-                                                                     schema = @Schema(
-                                                                             allowableValues = {"id", "createdDate",
-                                                                                     "lastModifiedDate", "price",
-                                                                                     "type", "status",
-                                                                                     /*book fields*/
-                                                                                     "title", "yearOfRelease",
-                                                                                     "description", "condition",
-                                                                                     "authorName"}
-                                                                     )
-                                                             )
-                                                             @RequestParam(defaultValue = "createdDate") String sortBy,
-                                                             @Parameter(
-                                                                     description = "Sort direction: `asc` or `desc`",
-                                                                     schema = @Schema(allowableValues = {"asc", "desc"})
-                                                             )
-                                                             @RequestParam(defaultValue = "desc") String sortDir) {
+    public Page<OfferWithBookResponse> getOffersWithBookPage(
+            @Validated @ParameterObject OfferFilterRequest filter,
+            @ParameterObject @PageableDefault(size = 10) Pageable pageable) {
+        pageable = resolveSort(pageable);
+        return offerService.getOffersWithBooksPage(filter, pageable);
+    }
 
-        return offerService.getOffersWithBooksPage(filter, page, size, sortBy, sortDir);
+    private Pageable resolveSort(Pageable pageable) {
+        Sort sort = pageable.getSort();
+        if (sort.getOrderFor("createdDate") == null) {
+            sort = sort.and(Sort.by(Sort.Direction.DESC, "createdDate"));
+        }
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
     }
 
     @No401Swgr

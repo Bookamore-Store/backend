@@ -48,6 +48,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/books/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/offers/{offerId}/messages").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/offers/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v2/offers/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/images/transfer").permitAll()
                         .anyRequest().authenticated()
                 )

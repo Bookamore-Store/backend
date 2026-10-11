@@ -13,15 +13,6 @@ INSERT INTO users (created_date, id, last_modified_date, email, name, password) 
 ON CONFLICT (id) DO NOTHING;
 
 --################
--- Authors (unique name)
---################
-INSERT INTO authors (created_date, id, last_modified_date, name) VALUES
-    (NOW(), '018d4f1a-5b03-71d4-b001-000000000001', NOW(), 'Joshua Bloch'),
-    (NOW(), '018d4f1a-5b03-71d4-b001-000000000002', NOW(), 'Craig Walls'),
-    (NOW(), '018d4f1a-5b03-71d4-b001-000000000003', NOW(), 'Robert C. Martin')
-ON CONFLICT (id) DO NOTHING;
-
---################
 -- Genres (unique name)
 --################
 INSERT INTO genres (created_date, id, last_modified_date, name) VALUES
@@ -33,38 +24,11 @@ ON CONFLICT (id) DO NOTHING;
 --################
 -- Books
 --################
-INSERT INTO books (year_of_release, created_date, id, last_modified_date, description, condition, isbn, title) VALUES
-    (2018, NOW(), '018d4f1a-5b03-71d4-c001-000000000001', NOW(), 'Best practices for the Java platform.', 'NEW', '9780134685991', 'Effective Java'),
-    (2018, NOW(), '018d4f1a-5b03-71d4-c001-000000000002', NOW(), 'Comprehensive guide to Spring Framework.', 'AS_NEW', '9781617294945', 'Spring in Action'),
-    (2008, NOW(), '018d4f1a-5b03-71d4-c001-000000000003', NOW(), 'A Handbook of Agile Software Craftsmanship.', 'USED', '9780132350884', 'Clean Code')
+INSERT INTO books (year_of_release, created_date, id, last_modified_date, description, condition, isbn, title, author_name) VALUES
+    (2018, NOW(), '018d4f1a-5b03-71d4-c001-000000000001', NOW(), 'Best practices for the Java platform.', 'NEW', '9780134685991', 'Effective Java', 'Joshua Bloch'),
+    (2018, NOW(), '018d4f1a-5b03-71d4-c001-000000000002', NOW(), 'Comprehensive guide to Spring Framework.', 'AS_NEW', '9781617294945', 'Spring in Action', 'Craig Walls'),
+    (2008, NOW(), '018d4f1a-5b03-71d4-c001-000000000003', NOW(), 'A Handbook of Agile Software Craftsmanship.', 'USED', '9780132350884', 'Clean Code', 'Robert C. Martin')
 ON CONFLICT (id) DO NOTHING;
-
---################
--- books_authors (немає PK/unique — ON CONFLICT не спрацює)
---################
-INSERT INTO books_authors (author_id, book_id)
-SELECT '018d4f1a-5b03-71d4-b001-000000000001', '018d4f1a-5b03-71d4-c001-000000000001'
-WHERE NOT EXISTS (
-    SELECT 1 FROM books_authors
-    WHERE author_id = '018d4f1a-5b03-71d4-b001-000000000001'
-      AND book_id = '018d4f1a-5b03-71d4-c001-000000000001'
-);
-
-INSERT INTO books_authors (author_id, book_id)
-SELECT '018d4f1a-5b03-71d4-b001-000000000002', '018d4f1a-5b03-71d4-c001-000000000002'
-WHERE NOT EXISTS (
-    SELECT 1 FROM books_authors
-    WHERE author_id = '018d4f1a-5b03-71d4-b001-000000000002'
-      AND book_id = '018d4f1a-5b03-71d4-c001-000000000002'
-);
-
-INSERT INTO books_authors (author_id, book_id)
-SELECT '018d4f1a-5b03-71d4-b001-000000000003', '018d4f1a-5b03-71d4-c001-000000000003'
-WHERE NOT EXISTS (
-    SELECT 1 FROM books_authors
-    WHERE author_id = '018d4f1a-5b03-71d4-b001-000000000003'
-      AND book_id = '018d4f1a-5b03-71d4-c001-000000000003'
-);
 
 --################
 -- Insert books images

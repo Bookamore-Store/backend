@@ -15,7 +15,4 @@ public interface OfferRepository extends JpaRepository<Offer, UUID>, JpaSpecific
     @EntityGraph(attributePaths = {"book", "user"})
     @Override
     Page<Offer> findAll(Specification<Offer> spec, Pageable pageable);
-
-    @EntityGraph(attributePaths = {"book", "user"})
-    Page<Offer> findAllByIdIn(Collection<UUID> ids, Pageable pageable);
 }

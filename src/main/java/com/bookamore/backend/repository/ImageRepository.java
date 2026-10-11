@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.UUID;
 
 public interface ImageRepository extends JpaRepository<Image, UUID> {
-    long countByEntityId(UUID entityId);
+    long countByEntityTypeAndEntityId(EntityType entityType, UUID entityId);
 
     List<Image> findAllByEntityTypeAndEntityId(EntityType entityType, UUID entityId);
 }
