@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+import org.hibernate.validator.constraints.ISBN;
 
 import java.util.List;
 
@@ -26,17 +27,19 @@ public class BookUpdateRequest {
     @Schema(example = "A Handbook of Agile Software Craftsmanship.", description = "Book description")
     private String description;
 
-    //TODO: Validation
-    @Schema(example = "9783161484100", description = "ISBN number of the book")
+    @ISBN(type = ISBN.Type.ANY, message = "ISBN must be a valid ISBN-10 or ISBN-13.")
+    @Schema(example = "9783161484100", description = "Valid ISBN-10 or ISBN-13, with or without hyphens")
     private String isbn;
 
     @Schema(example = "NEW", description = "Condition of the book")
     private BookCondition condition;
 
+    @Size(min = 1, message = "Authors list cannot be empty.")
     @Schema(example = "[\"Robert C. Martin\"]", description = "List of authors")
     private List<String> authors;
 
 //    @SupportedGenres
+    @Size(min = 1, message = "Genres list cannot be empty.")
     @Schema(example = "[\"mystery\", \"science_fiction\"]", description = "Supported category IDs from /api/v1/categories")
     private List<String> genres;
 }

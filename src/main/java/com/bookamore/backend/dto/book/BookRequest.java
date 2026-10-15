@@ -34,7 +34,7 @@ public class BookRequest {
     private String description;
 
     @ISBN(type = ISBN.Type.ANY, message = "ISBN must be a valid ISBN-10 or ISBN-13.")
-    @Schema(example = "0596520689, 9783161484100", description = "Valid ISBN-10 or ISBN-13, with or without hyphens")
+    @Schema(example = "9783161484100", description = "Valid ISBN-10 or ISBN-13, with or without hyphens")
     private String isbn;
 
     @NotNull(message = "Book condition cannot be null.")
