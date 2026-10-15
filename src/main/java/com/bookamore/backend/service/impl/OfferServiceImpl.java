@@ -1,7 +1,7 @@
 package com.bookamore.backend.service.impl;
 
 import com.bookamore.backend.dto.book.BookRequest;
-import com.bookamore.backend.dto.offer.OfferFilter;
+import com.bookamore.backend.dto.offer.OfferFilterRequest;
 import com.bookamore.backend.dto.offer.OfferRequest;
 import com.bookamore.backend.dto.offer.OfferResponse;
 import com.bookamore.backend.dto.offer.OfferUpdateRequest;
@@ -17,7 +17,7 @@ import com.bookamore.backend.mapper.offer.OfferMapper;
 import com.bookamore.backend.repository.BookRepository;
 import com.bookamore.backend.repository.OfferRepository;
 import com.bookamore.backend.repository.UserRepository;
-import com.bookamore.backend.repository.spec.OfferSpecification;
+import com.bookamore.backend.repository.spec.OfferSpecificationGenerator;
 import com.bookamore.backend.service.AccessCheckService;
 import com.bookamore.backend.service.BookService;
 import com.bookamore.backend.service.OfferFavoriteCounter;
@@ -26,16 +26,15 @@ import com.bookamore.backend.service.OfferService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -53,10 +52,6 @@ public class OfferServiceImpl implements OfferService {
     private final OfferFavoriteMarker offerFavoriteMarker;
     private final OfferFavoriteCounter offerFavoriteCounter;
     private final AccessCheckService accessCheckService;
-
-    private static final Set<String> BOOK_FIELDS = Set.of(
-            "title", "yearOfRelease", "description", "condition", "authorName"
-    );
 
     @Transactional
     public OfferResponse create(OfferRequest request) {
@@ -99,86 +94,27 @@ public class OfferServiceImpl implements OfferService {
         return resp;
     }
 
-    public Page<Offer> getOffersEntityPage(Integer page, Integer size, String sortBy, String sortDir) {
-
-        if (isBookField(sortBy)) {
-            return getOffersPageSortedByBookField(page, size, sortBy, sortDir);
-        }
-
-        Sort.Direction direction = Sort.Direction.fromString(sortDir);
-        Sort sort = Sort.by(direction, sortBy);
-        Pageable pageable = PageRequest.of(page, size, sort);
-        return offerRepository.findAll(pageable);
+    @Transactional(readOnly = true)
+    public Page<OfferResponse> getOffersPage(OfferFilterRequest filter, Pageable pageable) {
+        Page<OfferResponse> page = getOffersEntityPage(filter, pageable).map(offerMapper::toResponse);
+        offerFavoriteMarker.mark(page);
+        offerFavoriteCounter.count(page);
+        return page;
     }
 
-    private Page<Offer> getOffersPageSortedByBookField(Integer page, Integer size, String sortBy, String sortDir) {
-
-        Sort.Direction direction = Sort.Direction.fromString(sortDir);
-
-        if (sortBy.equals("authorName")) {
-            return offerRepository.findAll(
-                    OfferSpecification.sortByBookAuthorName(direction),
-                    PageRequest.of(page, size)
-            );
-        }
-
-        return offerRepository.findAll(
-                OfferSpecification.sortByBookSimpleFieldCaseSensitive(direction, sortBy),
-                PageRequest.of(page, size)
-        );
+    @Transactional(readOnly = true)
+    public Page<OfferWithBookResponse> getOffersWithBooksPage(OfferFilterRequest filter, Pageable pageable) {
+        Page<OfferWithBookResponse> page = getOffersEntityPage(filter, pageable).map(offerMapper::toResponseWithBook);
+        offerFavoriteMarker.markWithBook(page);
+        offerFavoriteCounter.countWithBook(page);
+        return page;
     }
 
-    private boolean isBookField(String field) {
-        return BOOK_FIELDS.contains(field);
-    }
-
-
-    public Page<OfferResponse> getOffersPage(Integer page, Integer size, String sortBy, String sortDir) {
-        Page<OfferResponse> p = getOffersEntityPage(page, size, sortBy, sortDir).map(offerMapper::toResponse);
-        offerFavoriteMarker.mark(p);
-        offerFavoriteCounter.count(p);
-        return p;
-    }
-
-    public Page<OfferWithBookResponse> getOffersWithBooksPage(OfferFilter filter, Integer page, Integer size,
-                                                              String sortBy, String sortDir) {
-        Page<OfferWithBookResponse> p = getOffersEntityPageWithFilter(filter, page, size, sortBy, sortDir).map(offerMapper::toResponseWithBook);
-        offerFavoriteMarker.markWithBook(p);
-        offerFavoriteCounter.countWithBook(p);
-        return p;
-    }
-
-    public Page<Offer> getOffersEntityPageWithFilter(OfferFilter filter, Integer page, Integer size, String sortBy, String sortDir) {
-
-        if (isBookField(sortBy)) {
-            return getOffersPageSortedByBookFieldWithFilter(filter, page, size, sortBy, sortDir);
-        }
-
-        Specification<Offer> spec = OfferSpecification.filterBy(filter);
-
-        Sort.Direction direction = Sort.Direction.fromString(sortDir);
-        Sort sort = Sort.by(direction, sortBy);
-        Pageable pageable = PageRequest.of(page, size, sort);
-
-        return offerRepository.findAll(spec, pageable);
-    }
-
-    private Page<Offer> getOffersPageSortedByBookFieldWithFilter(OfferFilter filter, Integer page, Integer size, String sortBy, String sortDir) {
-
-        Specification<Offer> spec = OfferSpecification.filterBy(filter);
-        Sort.Direction direction = Sort.Direction.fromString(sortDir);
-
-        if (sortBy.equals("authorName")) {
-            Specification<Offer> sortSpec = OfferSpecification.sortByBookAuthorName(direction);
-            spec = (spec == null) ? sortSpec : spec.and(sortSpec);
-
-            return offerRepository.findAll(spec, PageRequest.of(page, size));
-        }
-
-        Specification<Offer> sortSpec = OfferSpecification.sortByBookSimpleField(direction, sortBy);
-        spec = (spec == null) ? sortSpec : spec.and(sortSpec);
-
-        return offerRepository.findAll(spec, PageRequest.of(page, size));
+    private Page<Offer> getOffersEntityPage(OfferFilterRequest filter, Pageable pageable) {
+        Specification<Offer> spec = OfferSpecificationGenerator.getSpec(filter, pageable.getSort());
+        Pageable queryPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        Page<Offer> page = offerRepository.findAll(spec, queryPageable);
+        return new PageImpl<>(page.getContent(), pageable, page.getTotalElements());
     }
 
     public Offer getEntityById(UUID offerId) {

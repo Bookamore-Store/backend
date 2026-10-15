@@ -6,8 +6,8 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Hides 400 Not Found responses in Swagger UI.
- * Apply to methods or controllers where 404 is not relevant.
+ * Hides 400 Bad Request responses in Swagger UI.
+ * Apply to methods or controllers where 400 is not relevant.
  */
 @Target({ElementType.METHOD, ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)

@@ -1,0 +1,14 @@
+###
+# Get supported book category IDs
+GET http://localhost:8080/api/v1/genres
+Accept: application/json
+
+###
+# Get book category by ID
+GET http://localhost:8080/api/v1/genres/biography
+Accept: application/json
+
+###
+# Get all supported book categories with translations
+GET http://localhost:8080/api/v1/genres/all
+Accept: application/json

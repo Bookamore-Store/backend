@@ -8,11 +8,11 @@ import com.bookamore.backend.entity.Offer;
 import com.bookamore.backend.entity.enums.EntityType;
 import com.bookamore.backend.exception.ImageLimitExceededException;
 import com.bookamore.backend.exception.ResourceNotFoundException;
+import com.bookamore.backend.exception.UnsupportedEntityTypeException;
 import com.bookamore.backend.mapper.image.ImageMapper;
 import com.bookamore.backend.repository.BookRepository;
 import com.bookamore.backend.repository.ImageRepository;
 import com.bookamore.backend.repository.ImageStorageRepository;
-import com.bookamore.backend.repository.OfferRepository;
 import com.bookamore.backend.service.AccessCheckService;
 import com.bookamore.backend.service.ImageService;
 import jakarta.annotation.PostConstruct;
@@ -42,7 +42,6 @@ public class ImageServiceImpl implements ImageService {
     private final ImageStorageRepository imageStorageRepository;
     private final ImageMapper imageMapper;
     private final BookRepository bookRepository;
-    private final OfferRepository offerRepository;
     private final AccessCheckService accessCheckService;
 
     @Value("${file.hash-algorithm}")
@@ -208,8 +207,7 @@ public class ImageServiceImpl implements ImageService {
         boolean exists;
         switch (entityType) {
             case BOOK -> exists = bookRepository.existsById(entityId);
-            case OFFER -> exists = offerRepository.existsById(entityId);
-            default -> throw new IllegalArgumentException("Unsupported entity type: " + entityType);
+            default -> throw new UnsupportedEntityTypeException(entityType);
         }
 
         if (!exists) {
@@ -223,7 +221,7 @@ public class ImageServiceImpl implements ImageService {
         }
 
         // Check whether the entity has reached the maximum allowed number of images
-        long countOfImages = imageRepository.countByEntityId(entityId);
+        long countOfImages = imageRepository.countByEntityTypeAndEntityId(entityType, entityId);
         long limitCountOfImagesByType = IMAGE_LIMIT_BY_ENTITY.getOrDefault(entityType, 1).longValue();
 
         if (countOfImages >= limitCountOfImagesByType) {
@@ -323,16 +321,13 @@ public class ImageServiceImpl implements ImageService {
         }
         final String ERROR_MESSAGE = "%s with ID %s does not exist";
         Offer offer = switch (entityType) {
-            case OFFER -> offerRepository.findById(entityId)
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            String.format(ERROR_MESSAGE, entityType, entityId)));
             case BOOK -> {
                 Book book = bookRepository.findById(entityId)
                         .orElseThrow(() -> new ResourceNotFoundException(
                                 String.format(ERROR_MESSAGE, entityType, entityId)));
                 yield book.getOffer();
             }
-            default -> throw new IllegalArgumentException("Unsupported entity type: " + entityType);
+            default -> throw new UnsupportedEntityTypeException(entityType);
         };
         accessCheckService.requireOfferAuthor(offer);
     }

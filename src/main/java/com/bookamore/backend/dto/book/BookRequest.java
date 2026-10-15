@@ -1,5 +1,6 @@
 package com.bookamore.backend.dto.book;
 
+import com.bookamore.backend.annotation.SupportedGenres;
 import com.bookamore.backend.entity.enums.BookCondition;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
@@ -9,6 +10,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+import org.hibernate.validator.constraints.ISBN;
 
 import java.util.List;
 
@@ -31,8 +33,8 @@ public class BookRequest {
     @Schema(example = "A Handbook of Agile Software Craftsmanship.", description = "Book description")
     private String description;
 
-    //TODO Validation
-    @Schema(example = "9783161484100", description = "ISBN number of the book")
+    @ISBN(type = ISBN.Type.ANY, message = "ISBN must be a valid ISBN-10 or ISBN-13.")
+    @Schema(example = "9783161484100", description = "Valid ISBN-10 or ISBN-13, with or without hyphens")
     private String isbn;
 
     @NotNull(message = "Book condition cannot be null.")
@@ -43,7 +45,8 @@ public class BookRequest {
     @Schema(example = "[\"Robert C. Martin\"]", description = "List of authors")
     private List<String> authors;
 
+//    @SupportedGenres
     @NotEmpty(message = "Genres list cannot be empty.")
-    @Schema(example = "[\"Classic\", \"Novel\"]", description = "List of genres")
+    @Schema(example = "[\"mystery\", \"science_fiction\"]", description = "Supported genre IDs from /api/v1/genres")
     private List<String> genres;
 }

@@ -22,8 +22,9 @@ public class ImageController {
     private final ImageService imageService;
 
     @ApiResponses(value = {
+            @ApiResponse(responseCode = "400", description = "Unsupported entity type"),
             @ApiResponse(responseCode = "403", description = "Authenticated user is not the author"),
-            @ApiResponse(responseCode = "404", description = "Offer or book not found"),
+            @ApiResponse(responseCode = "404", description = "Entity not found"),
             @ApiResponse(responseCode = "409", description = "Entity has reached the maximum number of images")
     })
     @PostMapping(
