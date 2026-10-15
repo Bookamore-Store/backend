@@ -138,7 +138,7 @@ Base path `/api/v1`. Interactive documentation is served by springdoc:
 |---|---|---|
 | `AuthController` | `/api/v1/auth` | `signup`, `signin`, `verify-email` |
 | `BookController` | `/api/v1/books` | `GET` is public |
-| `CategoryController` | `/api/v1/categories` | Public `GET`: base path returns IDs; `/{id}` returns one object with `id`, `en`, `uk` (404 if unknown); `/all` returns all objects. Data: `src/main/resources/book-categories.json` |
+| `GenreController` | `/api/v1/categories` | Public `GET`: base path returns IDs; `/{id}` returns one object with `id`, `en`, `uk` (404 if unknown); `/all` returns all objects. Data: `src/main/resources/book-genres.json` |
 | `OfferController` | `/api/v1/offers` | `GET` is public |
 | `UserController` | `/api/v1/user` | authenticated |
 | `FavoriteController` | `/api/v1/favorites` | authenticated |

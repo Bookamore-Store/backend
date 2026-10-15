@@ -40,6 +40,6 @@ public class BookUpdateRequest {
 
 //    @SupportedGenres
     @Size(min = 1, message = "Genres list cannot be empty.")
-    @Schema(example = "[\"mystery\", \"science_fiction\"]", description = "Supported category IDs from /api/v1/categories")
+    @Schema(example = "[\"mystery\", \"science_fiction\"]", description = "Supported genre IDs from /api/v1/genres")
     private List<String> genres;
 }

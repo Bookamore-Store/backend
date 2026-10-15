@@ -17,7 +17,7 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Retention(RUNTIME)
 public @interface SupportedGenres {
 
-    String message() default "Genres must contain only supported category IDs from /api/v1/categories.";
+    String message() default "Genres must contain only supported genre IDs from /api/v1/genres.";
 
     Class<?>[] groups() default {};
 
