@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -60,7 +61,7 @@ public class BookController {
     })
     @PatchMapping("/{bookId}")
     public ResponseEntity<BookResponse> updateBook(@PathVariable UUID bookId,
-                                                   @RequestBody BookUpdateRequest bookUpdateRequest) {
+                                                   @Valid @RequestBody BookUpdateRequest bookUpdateRequest) {
         return ResponseEntity.status(HttpStatus.OK).body(bookService.update(bookId, bookUpdateRequest));
     }
 
