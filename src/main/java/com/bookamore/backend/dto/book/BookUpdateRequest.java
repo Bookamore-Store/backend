@@ -1,5 +1,6 @@
 package com.bookamore.backend.dto.book;
 
+import com.bookamore.backend.annotation.SupportedGenres;
 import com.bookamore.backend.entity.enums.BookCondition;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
@@ -35,6 +36,7 @@ public class BookUpdateRequest {
     @Schema(example = "[\"Robert C. Martin\"]", description = "List of authors")
     private List<String> authors;
 
-    @Schema(example = "[\"Classic\", \"Novel\"]", description = "List of genres")
+//    @SupportedGenres
+    @Schema(example = "[\"mystery\", \"science_fiction\"]", description = "Supported category IDs from /api/v1/categories")
     private List<String> genres;
 }

@@ -21,6 +21,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
@@ -199,7 +200,7 @@ public class OfferController {
 
     @Operation(summary = "Create offer and its book", description = "Create offer and its book")
     @PostMapping("/with-book")
-    public ResponseEntity<OfferWithBookResponse> createOfferWithBook(@RequestBody OfferWithBookRequest request) {
+    public ResponseEntity<OfferWithBookResponse> createOfferWithBook(@Valid @RequestBody OfferWithBookRequest request) {
 
         OfferWithBookResponse createdOffer = offerService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdOffer);
