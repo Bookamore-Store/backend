@@ -11,6 +11,7 @@ import com.bookamore.backend.entity.ChatMessage;
 import com.bookamore.backend.entity.Offer;
 import com.bookamore.backend.entity.User;
 import com.bookamore.backend.dto.chat.ChatParticipantRole;
+import com.bookamore.backend.mapper.image.ImageMapper;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingConstants;
@@ -18,9 +19,11 @@ import org.mapstruct.MappingConstants;
 import java.util.List;
 import java.util.UUID;
 
-@Mapper(componentModel = MappingConstants.ComponentModel.SPRING)
+@Mapper(componentModel = MappingConstants.ComponentModel.SPRING, uses = ImageMapper.class)
 public interface ChatMapper {
 
+    @Mapping(target = "author", source = "authorName")
+    @Mapping(target = "image", source = "images", qualifiedByName = "firstImageToShortResponse")
     ChatBookSummaryResponse toBookSummary(Book book);
 
     ChatOfferDetailResponse toOfferDetail(Offer offer);
