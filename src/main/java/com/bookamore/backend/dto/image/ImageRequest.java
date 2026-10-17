@@ -13,11 +13,19 @@ import java.util.UUID;
 public class ImageRequest {
 
     @NotNull(message = "Entity type is required!")
-    @Schema(description = "Entity type of image", example = "BOOK")
+    @Schema(
+        description = "Entity type of image",
+        implementation = String.class,
+        allowableValues = {"BOOK", "USER"},
+        example = "BOOK"
+    )
     private EntityType entityType;
 
-    @NotNull(message = "Entity ID is required!")
-    @Schema(description = "Entity id of image", example = "018d4f1a-5b03-71d4-c001-000000000001")
+    @Schema(
+        description = "Required for BOOK. For USER, defaults to the authenticated user's ID when omitted.",
+        requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+        example = "018d4f1a-5b03-71d4-c001-000000000001"
+    )
     private UUID entityId;
 
     @NotNull(message = "File is required!")

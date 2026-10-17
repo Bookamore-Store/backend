@@ -10,5 +10,6 @@ package com.bookamore.backend.entity.enums;
 public enum EntityType {
     BOOK,
     OFFER,
+    USER,
     /* Add entity types here */
 }
