@@ -45,7 +45,7 @@ public class BookRequest {
     @Schema(example = "[\"Robert C. Martin\"]", description = "List of authors")
     private List<String> authors;
 
-//    @SupportedGenres
+    @SupportedGenres
     @NotEmpty(message = "Genres list cannot be empty.")
     @Schema(example = "[\"mystery\", \"science_fiction\"]", description = "Supported genre IDs from /api/v1/genres")
     private List<String> genres;
