@@ -24,6 +24,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -105,11 +106,13 @@ public class AuthController {
                     @ApiResponse(responseCode = "503", description = "SMTP is not configured")
             }
     )
-    public ResponseEntity<Void> forgotPassword(@Validated @RequestBody ForgotPasswordRequest request) {
+    public ResponseEntity<Void> forgotPassword(
+            @Validated @RequestBody ForgotPasswordRequest request,
+            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage) {
         if (isSmtpUnavailable(request.getEmail())) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
         }
-        passwordResetService.requestReset(request.getEmail());
+        passwordResetService.requestReset(request.getEmail(), acceptLanguage);
         return ResponseEntity.status(HttpStatus.ACCEPTED).build();
     }
 
