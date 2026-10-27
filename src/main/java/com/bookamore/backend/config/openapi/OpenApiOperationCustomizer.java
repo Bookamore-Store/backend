@@ -28,6 +28,8 @@ public class OpenApiOperationCustomizer implements OperationCustomizer {
         removeUndeclaredStatus(operation, handlerMethod, HttpStatus.FORBIDDEN);
         removeUndeclaredStatus(operation, handlerMethod, HttpStatus.CONFLICT);
         removeUndeclaredStatus(operation, handlerMethod, HttpStatus.UNPROCESSABLE_ENTITY);
+        removeUndeclaredStatus(operation, handlerMethod, HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        removeUndeclaredStatus(operation, handlerMethod, HttpStatus.PAYLOAD_TOO_LARGE);
 
         return operation;
     }

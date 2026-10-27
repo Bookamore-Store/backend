@@ -8,7 +8,7 @@ import java.util.UUID;
 public interface PasswordResetService {
 
     @Async
-    void requestReset(String email);
+    void requestReset(String email, String acceptLanguage);
 
     void resetPassword(ResetPasswordRequest request);
 
