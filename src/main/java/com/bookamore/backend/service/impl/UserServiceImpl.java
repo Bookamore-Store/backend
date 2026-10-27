@@ -5,7 +5,6 @@ import com.bookamore.backend.entity.User;
 import com.bookamore.backend.exception.EmailAlreadyExistsException;
 import com.bookamore.backend.exception.ResourceNotFoundException;
 import com.bookamore.backend.mapper.user.UserMapper;
-import com.bookamore.backend.repository.AuthProviderRepository;
 import com.bookamore.backend.repository.UserRepository;
 import com.bookamore.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +13,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -23,7 +23,6 @@ import java.util.UUID;
 @Slf4j
 public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
-    private final AuthProviderRepository authProviderRepository;
     private final PasswordEncoder encoder;
 
     private final UserMapper userMapper;
@@ -48,6 +47,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public UserResponse getCurrentUser() {
         UserDetails principal = (UserDetails) SecurityContextHolder
                 .getContext()
@@ -60,6 +60,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public UserResponse findById(UUID id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Not found User with uuid = " + id));
