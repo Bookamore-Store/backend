@@ -21,6 +21,7 @@ import com.bookamore.backend.repository.ImageStorageRepository;
 import com.bookamore.backend.repository.UserRepository;
 import com.bookamore.backend.service.AccessCheckService;
 import com.bookamore.backend.service.ImageService;
+import com.bookamore.backend.service.image.HeicToWebpConverter;
 import com.bookamore.backend.util.SecurityUtils;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -66,6 +67,7 @@ public class ImageServiceImpl implements ImageService {
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
     private final AccessCheckService accessCheckService;
+    private final HeicToWebpConverter heicToWebpConverter;
 
     @Value("${file.hash-algorithm}")
     private String hash_algorithm;
@@ -91,12 +93,16 @@ public class ImageServiceImpl implements ImageService {
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
             "image/jpeg",
             "image/png",
-            "image/webp"
+            "image/webp",
+            "image/heic",
+            "image/heif"
     );
 
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
-            "jpg", "jpeg", "png", "webp"
+            "jpg", "jpeg", "png", "webp", "heic", "heif"
     );
+
+    private static final Set<String> HEIC_EXTENSIONS = Set.of("heic", "heif");
 
     @PostConstruct
     public void init() {
@@ -110,25 +116,6 @@ public class ImageServiceImpl implements ImageService {
     }
 
     @Transactional
-    public Image saveImage(ImageRequest imageRequest) {
-
-        EntityType entityType = imageRequest.getEntityType();
-        UUID entityId = imageRequest.getEntityId();
-        MultipartFile imageFile = imageRequest.getFile();
-
-        requireEntityAuthor(entityType, entityId);
-        validateEntity(entityType, entityId);
-        validateImageFileToSave(entityType, imageFile);
-        if (entityType == EntityType.USER) {
-            imageFile = prepareProfileImage(imageFile);
-        }
-
-        String path = saveImageToLocalStorage(imageFile, entityType);
-
-        return imageRepository.save(imageMapper.toEntity(imageRequest, path));
-    }
-
-    @Transactional
     public ImageResponse save(ImageRequest imageRequest) {
         if (imageRequest.getEntityType().equals(EntityType.USER)) {
             if (imageRequest.getEntityId() == null) {
@@ -139,6 +126,27 @@ public class ImageServiceImpl implements ImageService {
         return imageMapper.toResponse(
                 image
         );
+    }
+
+    private Image saveImage(ImageRequest imageRequest) {
+
+        EntityType entityType = imageRequest.getEntityType();
+        UUID entityId = imageRequest.getEntityId();
+        MultipartFile imageFile = imageRequest.getFile();
+
+        requireEntityAuthor(entityType, entityId);
+        validateEntity(entityType, entityId);
+        validateImageFileToSave(entityType, imageFile);
+        if (isHeicOrHeif(imageFile)) {
+            imageFile = convertHeicToWebp(imageFile);
+        }
+        if (entityType == EntityType.USER) {
+            imageFile = prepareProfileImage(imageFile);
+        }
+
+        String path = saveImageToLocalStorage(imageFile, entityType);
+
+        return imageRepository.save(imageMapper.toEntity(imageRequest, path));
     }
 
     @Override
@@ -165,9 +173,11 @@ public class ImageServiceImpl implements ImageService {
             throw new NotValidImageContentException("Image file is required. Please upload a valid image.");
         }
 
-        // Check image content type
+        String fileName = imageFile.getOriginalFilename();
+        String extension = extensionOf(fileName);
         String contentType = imageFile.getContentType();
-        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType)) {
+        boolean octetStreamHeic = "application/octet-stream".equals(contentType) && HEIC_EXTENSIONS.contains(extension);
+        if (contentType == null || (!ALLOWED_CONTENT_TYPES.contains(contentType) && !octetStreamHeic)) {
             log.warn(
                     "Image upload rejected: unsupported content type. " +
                             "entityType={}, originalFileName='{}', contentType='{}', allowed={}",
@@ -184,10 +194,6 @@ public class ImageServiceImpl implements ImageService {
             );
         }
 
-        // Check image extension
-        String fileName = imageFile.getOriginalFilename();
-        String extension = fileName == null ? "" :
-                fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase();
         if (fileName == null || !ALLOWED_EXTENSIONS.contains(extension)) {
             log.warn(
                     "Image upload rejected: invalid file extension. " +
@@ -241,6 +247,40 @@ public class ImageServiceImpl implements ImageService {
 
     }
 
+    private boolean isHeicOrHeif(MultipartFile imageFile) {
+        return HEIC_EXTENSIONS.contains(extensionOf(imageFile.getOriginalFilename()));
+    }
+
+    private MultipartFile convertHeicToWebp(MultipartFile imageFile) {
+        try {
+            byte[] webp = heicToWebpConverter.convert(imageFile.getBytes());
+            return new InMemoryMultipartFile(webpFileName(imageFile.getOriginalFilename()), "image/webp", webp);
+        } catch (IOException e) {
+            throw new NotValidImageContentException("Unable to read HEIC image. Please upload a valid image.", e);
+        }
+    }
+
+    private static String extensionOf(String fileName) {
+        if (fileName == null) {
+            return "";
+        }
+        int dot = fileName.lastIndexOf('.');
+        if (dot < 0 || dot == fileName.length() - 1) {
+            return "";
+        }
+        return fileName.substring(dot + 1).toLowerCase();
+    }
+
+    private static String webpFileName(String originalFileName) {
+        String cleaned = StringUtils.cleanPath(originalFileName);
+        int dot = cleaned.lastIndexOf('.');
+        String base = dot > 0 ? cleaned.substring(0, dot) : cleaned;
+        if (!StringUtils.hasText(base)) {
+            base = "image";
+        }
+        return base + ".webp";
+    }
+
     private MultipartFile prepareProfileImage(MultipartFile imageFile) {
         try (InputStream input = imageFile.getInputStream();
              ImageInputStream imageInput = new MemoryCacheImageInputStream(input)) {
@@ -284,7 +324,7 @@ public class ImageServiceImpl implements ImageService {
                 if (!ImageIO.write(resized, format, output)) {
                     throw new IOException("Unable to encode resized profile image.");
                 }
-                return new ResizedProfileImage("profile." + format, "image/" + format, output.toByteArray());
+                return new InMemoryMultipartFile("profile." + format, "image/" + format, output.toByteArray());
             } finally {
                 reader.dispose();
             }
@@ -293,7 +333,7 @@ public class ImageServiceImpl implements ImageService {
         }
     }
 
-    private record ResizedProfileImage(String fileName, String contentType, byte[] content) implements MultipartFile {
+    private record InMemoryMultipartFile(String fileName, String contentType, byte[] content) implements MultipartFile {
         @Override
         public String getName() {
             return "file";
