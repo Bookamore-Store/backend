@@ -1,8 +1,6 @@
-package com.bookamore.backend.service.image;
+package com.bookamore.backend.service.imageprocessing.decoder;
 
 import com.bookamore.backend.exception.NotValidImageContentException;
-import com.luciad.imageio.webp.CompressionType;
-import com.luciad.imageio.webp.WebPWriteParam;
 import openize.heic.decoder.HeicImage;
 import openize.heic.decoder.HeicImageFrame;
 import openize.heic.decoder.PixelFormat;
@@ -10,35 +8,16 @@ import openize.io.IOSeekMode;
 import openize.io.IOStream;
 import org.springframework.stereotype.Component;
 
-import javax.imageio.IIOImage;
-import javax.imageio.ImageIO;
-import javax.imageio.ImageWriteParam;
-import javax.imageio.ImageWriter;
-import javax.imageio.stream.ImageOutputStream;
-import javax.imageio.stream.MemoryCacheImageOutputStream;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.util.Iterator;
 
 @Component
-public class HeicToWebpConverter {
+public class HeicDecoder {
 
     /**
-     * Decodes a HEIC/HEIF file and encodes it as lossy WebP.
+     * Decodes a HEIC/HEIF file.
      * Openize applies the container rotation and mirror (irot/imir) while decoding.
      */
-    public byte[] convert(byte[] heicBytes) {
-        try {
-            BufferedImage decode = decode(heicBytes);
-            byte[] bytes = encodeWebp(decode);
-            return bytes;
-        } catch (IOException e) {
-            throw new NotValidImageContentException("Unable to convert HEIC image to WebP.", e);
-        }
-    }
-
-    private static BufferedImage decode(byte[] heicBytes) {
+    public BufferedImage decode(byte[] heicBytes) {
         try {
             ByteArrayIOStream input = new ByteArrayIOStream(heicBytes);
             HeicImage heic = HeicImage.load(input);
@@ -69,25 +48,6 @@ public class HeicToWebpConverter {
         } catch (RuntimeException e) {
             throw new NotValidImageContentException("Unable to read HEIC image. Please upload a valid image.", e);
         }
-    }
-
-    private static byte[] encodeWebp(BufferedImage image) throws IOException {
-        Iterator<ImageWriter> writers = ImageIO.getImageWritersByMIMEType("image/webp");
-        if (!writers.hasNext()) {
-            throw new IOException("Unable to encode image as WebP.");
-        }
-        ImageWriter writer = writers.next();
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        try (ImageOutputStream output = new MemoryCacheImageOutputStream(bytes)) {
-            writer.setOutput(output);
-            WebPWriteParam param = new WebPWriteParam(writer.getLocale());
-            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-            param.setCompressionType(CompressionType.Lossy);
-            writer.write(null, new IIOImage(image, null, null), param);
-        } finally {
-            writer.dispose();
-        }
-        return bytes.toByteArray();
     }
 
     /**
