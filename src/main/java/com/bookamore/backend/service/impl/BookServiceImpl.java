@@ -98,13 +98,10 @@ public class BookServiceImpl implements BookService {
 
         boolean simpleFieldsModified = updateSimpleFields(existingBook, patch);
 
-        boolean childrenModified = false;
-
-        childrenModified |= updateGenres(existingBook, patch);
-
-        updateImageOrder(existingBook, bookUpdateRequest.getImageOrder());
-
-        boolean anyModified = childrenModified | simpleFieldsModified;
+        boolean genresModified = updateGenres(existingBook, patch);
+        boolean imageOrderModified = updateImageOrder(existingBook, bookUpdateRequest.getImageOrder());
+        boolean childrenModified = genresModified || imageOrderModified;
+        boolean anyModified = childrenModified || simpleFieldsModified;
 
         if (anyModified) {
             if (childrenModified) {
@@ -193,9 +190,9 @@ public class BookServiceImpl implements BookService {
         return true;
     }
 
-    private void updateImageOrder(Book book, List<UUID> imageOrder) {
+    private boolean updateImageOrder(Book book, List<UUID> imageOrder) {
         if (imageOrder == null) {
-            return;
+            return false;
         }
         if (imageOrder.size() != new HashSet<>(imageOrder).size()) {
             throw new UnprocessableRequestException("imageOrder must contain unique image ids.");
@@ -223,9 +220,20 @@ public class BookServiceImpl implements BookService {
             }
         }
 
+        boolean modified = false;
         for (int index = 0; index < orderedImages.size(); index++) {
-            orderedImages.get(index).setOrderIndex(index);
+            Image image = orderedImages.get(index);
+            if (image.getOrderIndex() != index) {
+                image.setOrderIndex(index);
+                modified = true;
+            }
         }
+
+        // The collection was loaded in its old @OrderBy order. Reorder it in memory
+        // too, so the response mapped in this transaction reflects the new indexes.
+        images.sort(java.util.Comparator.comparingInt(Image::getOrderIndex)
+                .thenComparing(Image::getId));
+        return modified;
     }
 
 }
