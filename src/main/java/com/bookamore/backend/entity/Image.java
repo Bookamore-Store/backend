@@ -28,4 +28,7 @@ public class Image extends BaseEntity {
 
     @Column(length = 500)
     private String description;
+
+    @Column(name = "order_index", nullable = false)
+    private int orderIndex = 0;
 }

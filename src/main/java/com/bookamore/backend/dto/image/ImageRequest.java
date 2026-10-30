@@ -35,4 +35,10 @@ public class ImageRequest {
     @Size(min = 1, max = 500, message = "Description can be up to 500 characters.")
     @Schema(description = "Image description", example = "Book cover")
     private String description;
+
+    @Schema(
+            description = "Display order of the image. Defaults to 0 when omitted.",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED
+    )
+    private int orderIndex = -1;
 }

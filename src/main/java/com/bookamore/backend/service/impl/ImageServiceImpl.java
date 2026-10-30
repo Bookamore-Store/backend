@@ -134,6 +134,13 @@ public class ImageServiceImpl implements ImageService {
         validateEntity(entityType, entityId);
         validateImageFileToSave(entityType, imageFile);
 
+        if (imageRequest.getOrderIndex() == -1) {
+            int orderIndex = entityType == EntityType.BOOK
+                    ? imageRepository.findMaxOrderIndexByEntityTypeAndEntityId(entityType, entityId) + 1
+                    : 0;
+            imageRequest.setOrderIndex(orderIndex);
+        }
+
         imageFile = imageProcessingPipeline.process(imageFile, entityType);
 
         String path = saveImageToStorage(imageFile, entityType);
