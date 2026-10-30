@@ -1,7 +1,10 @@
 package com.bookamore.backend.mapper.offer;
 
-import com.bookamore.backend.dto.offer.*;
-import com.bookamore.backend.entity.Book;
+import com.bookamore.backend.dto.offer.OfferResponse;
+import com.bookamore.backend.dto.offer.OfferUpdateRequest;
+import com.bookamore.backend.dto.offer.OfferWithBookRequest;
+import com.bookamore.backend.dto.offer.OfferWithBookResponse;
+import com.bookamore.backend.dto.offer.Seller;
 import com.bookamore.backend.entity.Offer;
 import com.bookamore.backend.entity.User;
 import com.bookamore.backend.mapper.book.BookMapper;
@@ -27,10 +30,6 @@ public interface OfferMapper {
     @Mapping(target = "name", source = "name")
     Seller toSeller(User user); // Helper method for mapping user to Seller DTO
 
-    @Mapping(target = "book", source = "bookId", qualifiedByName = "createBookFromId")
-    @Mapping(target = "user", source = "sellerId", qualifiedByName = "createUserFromId")
-    Offer toEntity(OfferRequest request);
-
     @Mapping(target = "book", source = "book")
     @Mapping(target = "seller", source = "user")
     @Mapping(target = "favorite", ignore = true)
@@ -41,18 +40,6 @@ public interface OfferMapper {
     Offer toEntity(OfferWithBookRequest request);
 
     Offer toEntity(OfferUpdateRequest request);
-
-    Book toBookEntity(OfferWithBookRequest offerRequest);
-
-    @Named("createBookFromId")
-    default Book createBookFromId(UUID id) {
-        if (id == null) {
-            return null;
-        }
-        Book book = new Book();
-        book.setId(id);
-        return book;
-    }
 
     @Named("createUserFromId")
     default User createUserFromId(UUID id) {
