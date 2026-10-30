@@ -4,7 +4,6 @@ import com.bookamore.backend.annotation.No401Swgr;
 import com.bookamore.backend.annotation.No404Swgr;
 import com.bookamore.backend.dto.error.ErrorResponse;
 import com.bookamore.backend.dto.offer.OfferFilterRequest;
-import com.bookamore.backend.dto.offer.OfferRequest;
 import com.bookamore.backend.dto.offer.OfferResponse;
 import com.bookamore.backend.dto.offer.OfferUpdateRequest;
 import com.bookamore.backend.dto.offer.OfferWithBookRequest;
@@ -83,47 +82,6 @@ public class OfferController {
 
     @No401Swgr
     @No404Swgr
-    @GetMapping
-    @ResponseStatus(HttpStatus.OK)
-    @Operation(summary = "Get offers page", description = PAGE_DESCRIPTION + "Contains bookId for each offer.")
-    @Parameter(
-            name = "sort", in = ParameterIn.QUERY,
-            description = SORT_DESCRIPTION,
-            style = ParameterStyle.FORM, explode = Explode.TRUE,
-            array = @ArraySchema(schema = @Schema(type = "string", example = "price,asc"))
-    )
-    @ApiResponses(value = {
-            @ApiResponse(
-                    responseCode = "200",
-                    description = "Offers page returned successfully",
-                    useReturnTypeSchema = true,
-                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE)
-            ),
-            @ApiResponse(
-                    responseCode = "400",
-                    description = "Unsupported sort field, invalid filter value, or invalid price range",
-                    content = @Content(
-                            mediaType = MediaType.APPLICATION_JSON_VALUE,
-                            schema = @Schema(implementation = ErrorResponse.class),
-                            examples = @ExampleObject(
-                                    name = "Unsupported sort field",
-                                    value = """
-                                            {"timestamp":"2026-10-08T12:00:00","status":400,"error":"Bad Request",
-                                             "message":"Unsupported sort field: unknown","path":"/api/v1/offers"}
-                                            """
-                            )
-                    )
-            )
-    })
-    public Page<OfferResponse> getOffersPage(
-            @Validated @ParameterObject OfferFilterRequest filter,
-            @ParameterObject @PageableDefault(size = 10) Pageable pageable) {
-        pageable = resolveSort(pageable);
-        return offerService.getOffersPage(filter, pageable);
-    }
-
-    @No401Swgr
-    @No404Swgr
     @Operation(summary = "Get offers page with book fields", description = PAGE_DESCRIPTION + "Contains the nested book object for each offer.")
     @Parameter(
             name = "sort", in = ParameterIn.QUERY,
@@ -172,15 +130,6 @@ public class OfferController {
     }
 
     @No401Swgr
-    @GetMapping("/{offerId}")
-    @Operation(summary = "Get offer by id", description = "Get offer by id")
-    public ResponseEntity<OfferResponse> getOfferById(@PathVariable UUID offerId) {
-        OfferResponse offer = offerService.getById(offerId);
-
-        return offer != null ? ResponseEntity.ok(offer) : ResponseEntity.notFound().build();
-    }
-
-    @No401Swgr
     @Operation(summary = "Get offer by id with book fields", description = "Get offer by id with book fields")
     @GetMapping("/with-book/{offerId}")
     public ResponseEntity<OfferWithBookResponse> getOffersWithBookById(@PathVariable UUID offerId) {
@@ -188,14 +137,6 @@ public class OfferController {
         OfferWithBookResponse offer = offerService.getWithBookById(offerId);
 
         return offer != null ? ResponseEntity.ok(offer) : ResponseEntity.notFound().build();
-    }
-
-    @Operation(summary = "Create offer", description = "Create offer")
-    @PostMapping
-    public ResponseEntity<OfferResponse> createOffer(@RequestBody OfferRequest request) {
-
-        OfferResponse createdOffer = offerService.create(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(createdOffer);
     }
 
     @Operation(summary = "Create offer and its book", description = "Create offer and its book")
