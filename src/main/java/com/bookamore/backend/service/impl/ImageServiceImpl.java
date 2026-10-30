@@ -21,6 +21,8 @@ import com.bookamore.backend.repository.ImageStorageRepository;
 import com.bookamore.backend.repository.UserRepository;
 import com.bookamore.backend.service.AccessCheckService;
 import com.bookamore.backend.service.ImageService;
+import com.bookamore.backend.service.imageprocessing.ImageFormat;
+import com.bookamore.backend.service.imageprocessing.ImageProcessingPipeline;
 import com.bookamore.backend.util.SecurityUtils;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -31,29 +33,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.imageio.ImageIO;
-import javax.imageio.ImageReadParam;
-import javax.imageio.ImageReader;
-import javax.imageio.stream.ImageInputStream;
-import javax.imageio.stream.MemoryCacheImageInputStream;
-import java.awt.Graphics2D;
-import java.awt.Rectangle;
-import java.awt.RenderingHints;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -66,6 +52,7 @@ public class ImageServiceImpl implements ImageService {
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
     private final AccessCheckService accessCheckService;
+    private final ImageProcessingPipeline imageProcessingPipeline;
 
     @Value("${file.hash-algorithm}")
     private String hash_algorithm;
@@ -84,19 +71,47 @@ public class ImageServiceImpl implements ImageService {
             EntityType.BOOK, 5
     );
 
-    private static final long MIN_FILE_SIZE_BYTES = 5 * 1024;        // 5 KB
-    private static final long MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
-    private static final int PROFILE_IMAGE_DIMENSION = 400;
+    private static final long MIN_FILE_SIZE_BYTES = 5 * 1024;         // 5 KB
+    private static final long MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
 
-    private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
-            "image/jpeg",
-            "image/png",
-            "image/webp"
-    );
+    @Transactional
+    public ImageResponse save(ImageRequest imageRequest) {
+        if (imageRequest.getEntityType().equals(EntityType.USER)) {
+            if (imageRequest.getEntityId() == null) {
+                imageRequest.setEntityId(SecurityUtils.requireAuthenticatedUserId());
+            }
+        }
+        Image image = saveImage(imageRequest);
+        return imageMapper.toResponse(
+            image
+        );
+    }
 
-    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
-            "jpg", "jpeg", "png", "webp"
-    );
+    @Override
+    @Transactional(readOnly = true)
+    public ImageResponse getById(UUID imageId) {
+        Image image = imageRepository.findById(imageId)
+            .orElseThrow(() -> new ResourceNotFoundException("Image not found with id: " + imageId));
+        return imageMapper.toResponse(image);
+    }
+
+    @Transactional
+    public List<ImageResponse> getImageByEntity(EntityType entityType, UUID uuid) {
+        return imageRepository.findAllByEntityTypeAndEntityId(entityType, uuid)
+            .stream()
+            .map(imageMapper::toResponse)
+            .toList();
+    }
+
+    @Transactional
+    public void deleteImage(UUID imageId) {
+
+        Image image = imageRepository.findById(imageId)
+            .orElseThrow(() -> new ResourceNotFoundException("Image not found with id: " + imageId));
+        requireEntityAuthor(image.getEntityType(), image.getEntityId());
+        // The file in storage is deleted by ImageStorageCleanupListener after the transaction commits.
+        imageRepository.delete(image);
+    }
 
     @PostConstruct
     public void init() {
@@ -109,8 +124,7 @@ public class ImageServiceImpl implements ImageService {
         }
     }
 
-    @Transactional
-    public Image saveImage(ImageRequest imageRequest) {
+    private Image saveImage(ImageRequest imageRequest) {
 
         EntityType entityType = imageRequest.getEntityType();
         UUID entityId = imageRequest.getEntityId();
@@ -119,42 +133,19 @@ public class ImageServiceImpl implements ImageService {
         requireEntityAuthor(entityType, entityId);
         validateEntity(entityType, entityId);
         validateImageFileToSave(entityType, imageFile);
-        if (entityType == EntityType.USER) {
-            imageFile = prepareProfileImage(imageFile);
+
+        if (imageRequest.getOrderIndex() == -1) {
+            int orderIndex = entityType == EntityType.BOOK
+                    ? imageRepository.findMaxOrderIndexByEntityTypeAndEntityId(entityType, entityId) + 1
+                    : 0;
+            imageRequest.setOrderIndex(orderIndex);
         }
 
-        String path = saveImageToLocalStorage(imageFile, entityType);
+        imageFile = imageProcessingPipeline.process(imageFile, entityType);
+
+        String path = saveImageToStorage(imageFile, entityType);
 
         return imageRepository.save(imageMapper.toEntity(imageRequest, path));
-    }
-
-    @Transactional
-    public ImageResponse save(ImageRequest imageRequest) {
-        if (imageRequest.getEntityType().equals(EntityType.USER)) {
-            if (imageRequest.getEntityId() == null) {
-                imageRequest.setEntityId(SecurityUtils.requireAuthenticatedUserId());
-            }
-        }
-        Image image = saveImage(imageRequest);
-        return imageMapper.toResponse(
-                image
-        );
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public ImageResponse getById(UUID imageId) {
-        Image image = imageRepository.findById(imageId)
-                .orElseThrow(() -> new ResourceNotFoundException("Image not found with id: " + imageId));
-        return imageMapper.toResponse(image);
-    }
-
-    @Transactional
-    public List<ImageResponse> getImageByEntity(EntityType entityType, UUID uuid) {
-        return imageRepository.findAllByEntityTypeAndEntityId(entityType, uuid)
-                .stream()
-                .map(imageMapper::toResponse)
-                .toList();
     }
 
     private void validateImageFileToSave(EntityType entityType, MultipartFile imageFile) {
@@ -165,43 +156,42 @@ public class ImageServiceImpl implements ImageService {
             throw new NotValidImageContentException("Image file is required. Please upload a valid image.");
         }
 
-        // Check image content type
+        String fileName = imageFile.getOriginalFilename();
+        String extension = ImageFormat.extensionOf(fileName);
         String contentType = imageFile.getContentType();
-        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType)) {
+        boolean octetStreamHeic = "application/octet-stream".equals(contentType)
+                && ImageFormat.allowsOctetStream(extension);
+        if (contentType == null || (!ImageFormat.contentTypes().contains(contentType) && !octetStreamHeic)) {
             log.warn(
                     "Image upload rejected: unsupported content type. " +
                             "entityType={}, originalFileName='{}', contentType='{}', allowed={}",
                     entityType,
                     imageFile.getOriginalFilename(),
                     contentType,
-                    ALLOWED_CONTENT_TYPES
+                    ImageFormat.contentTypes()
             );
             throw new UnsupportedImageTypeException(
                     String.format(
                             "Unsupported image format. Allowed formats: %s.",
-                            String.join(" ,", ALLOWED_CONTENT_TYPES)
+                            String.join(" ,", ImageFormat.contentTypes())
                     )
             );
         }
 
-        // Check image extension
-        String fileName = imageFile.getOriginalFilename();
-        String extension = fileName == null ? "" :
-                fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase();
-        if (fileName == null || !ALLOWED_EXTENSIONS.contains(extension)) {
+        if (fileName == null || !ImageFormat.extensions().contains(extension)) {
             log.warn(
                     "Image upload rejected: invalid file extension. " +
                             "entityType={}, originalFileName='{}', extension='{}', allowed={}",
                     entityType,
                     fileName,
                     extension,
-                    ALLOWED_EXTENSIONS
+                    ImageFormat.extensions()
             );
 
             throw new UnsupportedImageTypeException(
                     String.format(
                             "Invalid file extension. Allowed extensions: %s.",
-                            String.join(" ,", ALLOWED_EXTENSIONS)
+                            String.join(" ,", ImageFormat.extensions())
                     )
             );
         }
@@ -239,100 +229,6 @@ public class ImageServiceImpl implements ImageService {
             );
         }
 
-    }
-
-    private MultipartFile prepareProfileImage(MultipartFile imageFile) {
-        try (InputStream input = imageFile.getInputStream();
-             ImageInputStream imageInput = new MemoryCacheImageInputStream(input)) {
-            Iterator<ImageReader> readers = ImageIO.getImageReaders(imageInput);
-            if (!readers.hasNext()) {
-                throw new NotValidImageContentException("Unable to read image dimensions. Please upload a valid image.");
-            }
-            ImageReader reader = readers.next();
-            try {
-                reader.setInput(imageInput);
-                int width = reader.getWidth(0);
-                int height = reader.getHeight(0);
-                if (width < PROFILE_IMAGE_DIMENSION || height < PROFILE_IMAGE_DIMENSION) {
-                    throw new InvalidImageSizeException("Profile image must be at least 400x400 pixels.");
-                }
-                if (width == PROFILE_IMAGE_DIMENSION && height == PROFILE_IMAGE_DIMENSION) {
-                    return imageFile;
-                }
-
-                ImageReadParam readParam = reader.getDefaultReadParam();
-                int cropSize = Math.min(width, height);
-                readParam.setSourceRegion(new Rectangle(
-                        (width - cropSize) / 2, (height - cropSize) / 2, cropSize, cropSize));
-                int subsampling = Math.min(width / PROFILE_IMAGE_DIMENSION, height / PROFILE_IMAGE_DIMENSION);
-                readParam.setSourceSubsampling(subsampling, subsampling, 0, 0);
-                BufferedImage source = reader.read(0, readParam);
-                boolean jpeg = "JPEG".equalsIgnoreCase(reader.getFormatName());
-                BufferedImage resized = new BufferedImage(PROFILE_IMAGE_DIMENSION, PROFILE_IMAGE_DIMENSION,
-                        jpeg ? BufferedImage.TYPE_INT_RGB : BufferedImage.TYPE_INT_ARGB);
-                Graphics2D graphics = resized.createGraphics();
-                try {
-                    graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
-                            RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-                    graphics.drawImage(source, 0, 0, PROFILE_IMAGE_DIMENSION, PROFILE_IMAGE_DIMENSION, null);
-                } finally {
-                    graphics.dispose();
-                }
-                // WebP has a reader only; save resized WebP images as PNG to preserve transparency.
-                String format = jpeg ? "jpeg" : "png";
-                ByteArrayOutputStream output = new ByteArrayOutputStream();
-                if (!ImageIO.write(resized, format, output)) {
-                    throw new IOException("Unable to encode resized profile image.");
-                }
-                return new ResizedProfileImage("profile." + format, "image/" + format, output.toByteArray());
-            } finally {
-                reader.dispose();
-            }
-        } catch (IOException e) {
-            throw new NotValidImageContentException("Unable to process profile image. Please upload a valid image.", e);
-        }
-    }
-
-    private record ResizedProfileImage(String fileName, String contentType, byte[] content) implements MultipartFile {
-        @Override
-        public String getName() {
-            return "file";
-        }
-
-        @Override
-        public String getOriginalFilename() {
-            return fileName;
-        }
-
-        @Override
-        public String getContentType() {
-            return contentType;
-        }
-
-        @Override
-        public boolean isEmpty() {
-            return content.length == 0;
-        }
-
-        @Override
-        public long getSize() {
-            return content.length;
-        }
-
-        @Override
-        public byte[] getBytes() {
-            return content;
-        }
-
-        @Override
-        public InputStream getInputStream() {
-            return new ByteArrayInputStream(content);
-        }
-
-        @Override
-        public void transferTo(File dest) throws IOException {
-            Files.write(dest.toPath(), content);
-        }
     }
 
     private void validateEntity(EntityType entityType, UUID entityId) {
@@ -378,7 +274,7 @@ public class ImageServiceImpl implements ImageService {
         }
     }
 
-    private String saveImageToLocalStorage(MultipartFile file, EntityType entityType) {
+    private String saveImageToStorage(MultipartFile file, EntityType entityType) {
         // get subdirectory name
         String subDir = entityType.toString().toLowerCase();
 
@@ -437,16 +333,6 @@ public class ImageServiceImpl implements ImageService {
         String hexHash = HexFormat.of().formatHex(hash);
 
         return hexHash + extension;
-    }
-
-    @Transactional
-    public void deleteImage(UUID imageId) {
-
-        Image image = imageRepository.findById(imageId)
-                .orElseThrow(() -> new ResourceNotFoundException("Image not found with id: " + imageId));
-        requireEntityAuthor(image.getEntityType(), image.getEntityId());
-        // The file in storage is deleted by ImageStorageCleanupListener after the transaction commits.
-        imageRepository.delete(image);
     }
 
     private void requireEntityAuthor(EntityType entityType, UUID entityId) {
