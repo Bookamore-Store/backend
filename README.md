@@ -99,6 +99,23 @@ list; the allow-list uses the whole value, while redirects use the **first entry
 trailing slashes stripped. Keep the environment's own origin first, or users will be bounced
 to a different host after login.
 
+### Sentry — request performance dashboard
+
+The backend includes the Sentry Spring Boot SDK. To enable it, create a Sentry
+account and a **Java / Spring Boot** project, then set its project **DSN** as
+`SENTRY_DSN` in the runtime environment (or in the local `.env`). With no DSN,
+Sentry remains inactive. `SENTRY_ENVIRONMENT` labels events (`local`, `dev`,
+`prod`), `SENTRY_RELEASE` optionally labels a deployment, and
+`SENTRY_TRACES_SAMPLE_RATE` controls the fraction of HTTP requests recorded
+(default `1.0`, suitable for a low-traffic service). Configure these variables
+in the GitOps compose/deployment environment for production.
+
+The SDK records request transactions so Sentry can show request volume and
+latency by endpoint in **Explore → Traces** and custom dashboards. Start by
+checking transaction count and p95 duration grouped by transaction/endpoint.
+This is API performance data; CPU and memory usage require host/container
+metrics from a separate monitoring tool. Default PII collection is disabled.
+
 ---
 
 ## 3. Database and migrations
