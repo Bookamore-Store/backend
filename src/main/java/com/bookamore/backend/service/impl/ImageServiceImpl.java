@@ -68,7 +68,7 @@ public class ImageServiceImpl implements ImageService {
      * the default by adding an entry in this Map.
      */
     private final static Map<EntityType, Integer> IMAGE_LIMIT_BY_ENTITY = Map.of(
-            EntityType.BOOK, 5
+            EntityType.BOOK, 6
     );
 
     private static final long MIN_FILE_SIZE_BYTES = 5 * 1024;         // 5 KB
