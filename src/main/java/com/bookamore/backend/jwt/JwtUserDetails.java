@@ -14,19 +14,19 @@ import java.util.*;
 public class JwtUserDetails implements UserDetails, OAuth2User, OidcUser {
     private final UUID id;
     private final String email;
+    private final String passwordHash;
     private final Map<String, Object> attributes; // for oauth2 users
 
     // constructor for JWT (w/o OAuth2 attributes)
-    public JwtUserDetails(UUID id, String email) {
-        this.id = id;
-        this.email = email;
-        this.attributes = new HashMap<>();
+    public JwtUserDetails(UUID id, String email, String passwordHash) {
+        this(id, email, new HashMap<>(), passwordHash);
     }
 
     // constructor for OAuth2 users
-    public JwtUserDetails(UUID id, String email, Map<String, Object> attributes) {
+    public JwtUserDetails(UUID id, String email, Map<String, Object> attributes, String passwordHash) {
         this.id = id;
         this.email = email;
+        this.passwordHash = passwordHash;
         this.attributes = attributes == null ? new HashMap<>() : attributes;
     }
 

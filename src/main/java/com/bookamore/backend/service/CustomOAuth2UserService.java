@@ -39,6 +39,6 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         log.info("User from findOrCreateOAuth2User method : id - {}, email - {}", user.getId(), user.getEmail());
 
         // create JwtUserDetails object for Spring Security
-        return new JwtUserDetails(user.getId(), user.getEmail(), oAuth2User.getAttributes());
+        return new JwtUserDetails(user.getId(), user.getEmail(), oAuth2User.getAttributes(), user.getPassword());
     }
 }

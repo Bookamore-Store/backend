@@ -27,6 +27,6 @@ public class UserServiceDetailsImpl implements UserDetailsService {
     }
 
     private UserDetails remapper(User user) {
-        return new JwtUserDetails(user.getId(), user.getEmail());
+        return new JwtUserDetails(user.getId(), user.getEmail(), user.getPassword());
     }
 }

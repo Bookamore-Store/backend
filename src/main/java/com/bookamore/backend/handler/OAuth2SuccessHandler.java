@@ -42,7 +42,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         JwtUserDetails oAuth2User = (JwtUserDetails) authentication.getPrincipal();
 
         // generate JWT token
-        String token = tokenService.generateToken(oAuth2User.getId());
+        String token = tokenService.generateToken(oAuth2User.getId(), oAuth2User.getPasswordHash());
 
         log.info("OAuth2 login succeeded for user id {}", oAuth2User.getId());
 
