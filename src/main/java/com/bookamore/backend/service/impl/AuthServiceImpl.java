@@ -35,7 +35,7 @@ public class AuthServiceImpl implements AuthService {
                 .filter(user -> encoder.matches(request.getPassword(), user.getPassword()))
                 .map(user -> {
                     passwordResetService.clearResetCode(user.getId());
-                    return tokenService.generateToken(user.getId());
+                    return tokenService.generateToken(user.getId(), user.getPassword());
                 })
                 .map(SignInResponse::ok)
                 .orElseGet(SignInResponse::error);

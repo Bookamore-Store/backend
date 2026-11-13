@@ -1,5 +1,8 @@
 package com.bookamore.backend.service;
 
+import com.bookamore.backend.dto.password.ChangePasswordRequest;
+import com.bookamore.backend.dto.signin.SignInResponse;
+import com.bookamore.backend.dto.user.UserProfileUpdateRequest;
 import com.bookamore.backend.dto.user.UserResponse;
 import com.bookamore.backend.entity.User;
 
@@ -14,4 +17,8 @@ public interface UserService {
     UserResponse getCurrentUser();
 
     UserResponse findById(UUID id);
+
+    UserResponse updateProfile(UserProfileUpdateRequest request);
+
+    SignInResponse changePassword(ChangePasswordRequest request);
 }
