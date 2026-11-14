@@ -5,8 +5,10 @@ import com.bookamore.backend.dto.book.BookResponse;
 import com.bookamore.backend.dto.book.BookUpdateRequest;
 import com.bookamore.backend.entity.Book;
 import com.bookamore.backend.entity.BookGenre;
+import com.bookamore.backend.entity.Image;
 import com.bookamore.backend.entity.enums.BookCondition;
 import com.bookamore.backend.exception.ResourceNotFoundException;
+import com.bookamore.backend.exception.UnprocessableRequestException;
 import com.bookamore.backend.mapper.book.BookMapper;
 import com.bookamore.backend.repository.BookGenreRepository;
 import com.bookamore.backend.repository.BookRepository;
@@ -19,9 +21,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -93,11 +98,10 @@ public class BookServiceImpl implements BookService {
 
         boolean simpleFieldsModified = updateSimpleFields(existingBook, patch);
 
-        boolean childrenModified = false;
-
-        childrenModified |= updateGenres(existingBook, patch);
-
-        boolean anyModified = childrenModified | simpleFieldsModified;
+        boolean genresModified = updateGenres(existingBook, patch);
+        boolean imageOrderModified = updateImageOrder(existingBook, bookUpdateRequest.getImageOrder());
+        boolean childrenModified = genresModified || imageOrderModified;
+        boolean anyModified = childrenModified || simpleFieldsModified;
 
         if (anyModified) {
             if (childrenModified) {
@@ -184,6 +188,52 @@ public class BookServiceImpl implements BookService {
         }
 
         return true;
+    }
+
+    private boolean updateImageOrder(Book book, List<UUID> imageOrder) {
+        if (imageOrder == null) {
+            return false;
+        }
+        if (imageOrder.size() != new HashSet<>(imageOrder).size()) {
+            throw new UnprocessableRequestException("imageOrder must contain unique image ids.");
+        }
+
+        List<Image> images = book.getImages();
+        Map<UUID, Image> imagesById = images.stream()
+                .collect(Collectors.toMap(Image::getId, Function.identity()));
+
+        List<Image> orderedImages = new ArrayList<>();
+        for (UUID imageId : imageOrder) {
+            Image image = imagesById.get(imageId);
+            if (image == null) {
+                throw new ResourceNotFoundException(
+                        "Image not found with id: " + imageId + " for book: " + book.getId()
+                );
+            }
+            orderedImages.add(image);
+        }
+
+        Set<UUID> requestedIds = new HashSet<>(imageOrder);
+        for (Image image : images) {
+            if (!requestedIds.contains(image.getId())) {
+                orderedImages.add(image);
+            }
+        }
+
+        boolean modified = false;
+        for (int index = 0; index < orderedImages.size(); index++) {
+            Image image = orderedImages.get(index);
+            if (image.getOrderIndex() != index) {
+                image.setOrderIndex(index);
+                modified = true;
+            }
+        }
+
+        // The collection was loaded in its old @OrderBy order. Reorder it in memory
+        // too, so the response mapped in this transaction reflects the new indexes.
+        images.sort(java.util.Comparator.comparingInt(Image::getOrderIndex)
+                .thenComparing(Image::getId));
+        return modified;
     }
 
 }

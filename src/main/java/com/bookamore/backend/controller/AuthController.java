@@ -22,7 +22,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -108,11 +110,12 @@ public class AuthController {
     )
     public ResponseEntity<Void> forgotPassword(
             @Validated @RequestBody ForgotPasswordRequest request,
-            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage) {
+            @RequestHeader(value = "Accept-Language", required = false) String browserLanguage,
+            @CookieValue(name = "i18next", required = false) String userLanguage) {
         if (isSmtpUnavailable(request.getEmail())) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
         }
-        passwordResetService.requestReset(request.getEmail(), acceptLanguage);
+        passwordResetService.requestReset(request.getEmail(), resolveLanguage(userLanguage, browserLanguage));
         return ResponseEntity.status(HttpStatus.ACCEPTED).build();
     }
 
@@ -143,6 +146,10 @@ public class AuthController {
     public ResponseEntity<Void> resetPassword(@Validated @RequestBody ResetPasswordRequest request) {
         passwordResetService.resetPassword(request);
         return ResponseEntity.ok().build();
+    }
+
+    private static String resolveLanguage(String userLanguage, String browserLanguage) {
+        return StringUtils.hasText(userLanguage) ? userLanguage.trim() : browserLanguage;
     }
 
     private boolean isSmtpUnavailable(String email) {

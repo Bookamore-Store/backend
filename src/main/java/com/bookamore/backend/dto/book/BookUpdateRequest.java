@@ -5,11 +5,13 @@ import com.bookamore.backend.entity.enums.BookCondition;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 import org.hibernate.validator.constraints.ISBN;
 
 import java.util.List;
+import java.util.UUID;
 
 @Data
 public class BookUpdateRequest {
@@ -42,4 +44,10 @@ public class BookUpdateRequest {
     @Size(min = 1, message = "Genres list cannot be empty.")
     @Schema(example = "[\"mystery\", \"science_fiction\"]", description = "Supported genre IDs from /api/v1/genres")
     private List<String> genres;
+
+    @Schema(
+            description = "Image IDs of this book in the desired order. Listed images get order_index 0, 1, 2, and so on. Omitted images keep their relative order and follow the listed ones.",
+            example = "[\"018d4f1a-5b03-71d4-c001-000000000001\", \"018d4f1a-5b03-71d4-c001-000000000002\"]"
+    )
+    private List<@NotNull(message = "Image id cannot be null.") UUID> imageOrder;
 }

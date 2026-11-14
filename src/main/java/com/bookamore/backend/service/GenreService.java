@@ -8,7 +8,11 @@ public interface GenreService {
 
     List<String> getGenres();
 
+    List<String> getGenresByOffersAvailability(boolean haveBooks);
+
     GenreResponse getGenreById(String id);
 
-    List<GenreResponse> getAllGenres();
+    List<GenreResponse> getGenresFullInfo();
+
+    List<GenreResponse> getGenresFullInfoByOffersAvailability(boolean haveBooks);
 }

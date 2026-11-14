@@ -15,3 +15,5 @@ databaseChangeLog:
       file: db/changelog/changes/007_replace_book_authors_with_author_name.sql
   - include:
       file: db/changelog/changes/008_normalize_genre_names.sql
+  - include:
+      file: db/changelog/changes/009_add_image_order_index.sql

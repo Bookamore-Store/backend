@@ -36,6 +36,6 @@ public class CustomOidcUserService extends OidcUserService {
         User user = oAuth2Service.findOrCreateOAuth2User(providerType, providerUserId, oidcUser);
         log.info("OIDC User found/created: id={}, email={}", user.getId(), user.getEmail());
 
-        return new JwtUserDetails(user.getId(), user.getEmail(), oidcUser.getAttributes());
+        return new JwtUserDetails(user.getId(), user.getEmail(), oidcUser.getAttributes(), user.getPassword());
     }
 }

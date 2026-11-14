@@ -46,7 +46,8 @@ public class BookController {
 
 
     @Operation(summary = "Update book", description = "PATCH endpoint for book resource updates. " +
-            "Supports partial updates using BookRequest schema fields.")
+            "Supports partial updates. Optional imageOrder lists this book's image ids in the desired order. " +
+            "Those images receive order_index 0, 1, 2, and so on. Images omitted from the list keep their relative order and are placed after the listed ones.")
     @ApiResponses(value = {
             @ApiResponse(
                     responseCode = "200",
@@ -56,8 +57,10 @@ public class BookController {
                             schema = @Schema(implementation = BookResponse.class)
                     )
             ),
+            @ApiResponse(responseCode = "400", description = "imageOrder contains a null id"),
             @ApiResponse(responseCode = "403", description = "Authenticated user is not the author"),
-            @ApiResponse(responseCode = "404", description = "Book not found")
+            @ApiResponse(responseCode = "404", description = "Book not found, or an image id in imageOrder does not belong to the book"),
+            @ApiResponse(responseCode = "422", description = "imageOrder contains duplicate image ids")
     })
     @PatchMapping("/{bookId}")
     public ResponseEntity<BookResponse> updateBook(@PathVariable UUID bookId,

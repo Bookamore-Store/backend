@@ -7,8 +7,8 @@ spring:
     active: local
   servlet:
     multipart:
-      max-file-size: 5MB
-      max-request-size: 6MB
+      max-file-size: 20MB
+      max-request-size: 21MB
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/master.yaml

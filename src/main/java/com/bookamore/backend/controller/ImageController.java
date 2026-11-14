@@ -4,7 +4,6 @@ import com.bookamore.backend.dto.image.ImageRequest;
 import com.bookamore.backend.dto.image.ImageResponse;
 import com.bookamore.backend.entity.enums.EntityType;
 import com.bookamore.backend.service.ImageService;
-import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -22,16 +21,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ImageController {
     private final ImageService imageService;
-
-    @Hidden
-    @PostMapping(
-            value = "/upload",
-            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
-    )
-    @Deprecated
-    public ResponseEntity<ImageResponse> uploadImageOld(@ModelAttribute ImageRequest request) {
-        return ResponseEntity.ok(imageService.save(request));
-    }
 
     @ApiResponses(value = {
             @ApiResponse(responseCode = "400", description = "Unsupported entity type or invalid image content"),

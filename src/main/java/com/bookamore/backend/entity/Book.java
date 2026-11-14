@@ -64,7 +64,7 @@ public class Book extends BaseEntity {
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "entity_id", referencedColumnName = "id", insertable = false, updatable = false)
     @SQLRestriction("entity_type = 'BOOK'")
-    @OrderBy("id ASC")
+    @OrderBy("orderIndex ASC, id ASC")
     @BatchSize(size = 10)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude

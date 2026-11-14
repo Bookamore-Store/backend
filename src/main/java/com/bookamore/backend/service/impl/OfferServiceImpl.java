@@ -2,21 +2,17 @@ package com.bookamore.backend.service.impl;
 
 import com.bookamore.backend.dto.book.BookRequest;
 import com.bookamore.backend.dto.offer.OfferFilterRequest;
-import com.bookamore.backend.dto.offer.OfferRequest;
 import com.bookamore.backend.dto.offer.OfferResponse;
 import com.bookamore.backend.dto.offer.OfferUpdateRequest;
 import com.bookamore.backend.dto.offer.OfferWithBookRequest;
 import com.bookamore.backend.dto.offer.OfferWithBookResponse;
 import com.bookamore.backend.entity.Book;
 import com.bookamore.backend.entity.Offer;
-import com.bookamore.backend.entity.User;
 import com.bookamore.backend.entity.enums.OfferStatus;
 import com.bookamore.backend.entity.enums.OfferType;
 import com.bookamore.backend.exception.ResourceNotFoundException;
 import com.bookamore.backend.mapper.offer.OfferMapper;
-import com.bookamore.backend.repository.BookRepository;
 import com.bookamore.backend.repository.OfferRepository;
-import com.bookamore.backend.repository.UserRepository;
 import com.bookamore.backend.repository.spec.OfferSpecificationGenerator;
 import com.bookamore.backend.service.AccessCheckService;
 import com.bookamore.backend.service.BookService;
@@ -34,7 +30,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -43,8 +38,6 @@ import java.util.UUID;
 public class OfferServiceImpl implements OfferService {
 
     private final OfferRepository offerRepository;
-    private final BookRepository bookRepository;
-    private final UserRepository userRepository;
 
     private final BookService bookService;
 
@@ -52,32 +45,6 @@ public class OfferServiceImpl implements OfferService {
     private final OfferFavoriteMarker offerFavoriteMarker;
     private final OfferFavoriteCounter offerFavoriteCounter;
     private final AccessCheckService accessCheckService;
-
-    @Transactional
-    public OfferResponse create(OfferRequest request) {
-        UUID bookId = Optional.ofNullable(request.getBookId())
-                .orElseThrow(() -> new IllegalArgumentException("Provided OfferRequest with bookId = null"));
-
-        UUID sellerId = Optional.ofNullable(request.getSellerId())
-                .orElseThrow(() -> new IllegalArgumentException("Provided OfferRequest with sellerId = null"));
-
-        Book book = bookRepository.findById(bookId).orElseThrow(
-                () -> new ResourceNotFoundException(String.format("Book not found with id: %s. Please, ensure the book exists before this operation", bookId))
-        );
-
-        User user = userRepository.findById(sellerId).orElseThrow(
-                () -> new ResourceNotFoundException(String.format("User not found with id: %s. Please, ensure the user exists before this operation", sellerId))
-        );
-
-        Offer offer = offerMapper.toEntity(request);
-        offer.setBook(book);
-        offer.setUser(user);
-        offer = offerRepository.save(offer);
-        OfferResponse resp = offerMapper.toResponse(offer);
-        resp.setFavorite(false);
-        resp.setFavoritesCount(0L);
-        return resp;
-    }
 
     @Transactional
     public OfferWithBookResponse create(OfferWithBookRequest request) {
@@ -92,14 +59,6 @@ public class OfferServiceImpl implements OfferService {
         resp.setFavorite(false);
         resp.setFavoritesCount(0L);
         return resp;
-    }
-
-    @Transactional(readOnly = true)
-    public Page<OfferResponse> getOffersPage(OfferFilterRequest filter, Pageable pageable) {
-        Page<OfferResponse> page = getOffersEntityPage(filter, pageable).map(offerMapper::toResponse);
-        offerFavoriteMarker.mark(page);
-        offerFavoriteCounter.count(page);
-        return page;
     }
 
     @Transactional(readOnly = true)
@@ -120,13 +79,6 @@ public class OfferServiceImpl implements OfferService {
     public Offer getEntityById(UUID offerId) {
         return offerRepository.findById(offerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Offer not found with id: " + offerId));
-    }
-
-    public OfferResponse getById(UUID offerId) {
-        OfferResponse response = offerMapper.toResponse(getEntityById(offerId));
-        offerFavoriteMarker.mark(response);
-        offerFavoriteCounter.count(response);
-        return response;
     }
 
     public OfferWithBookResponse getWithBookById(UUID offerId) {
